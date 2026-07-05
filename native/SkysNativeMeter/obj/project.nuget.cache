@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "dgSpecHash": "/0PZ1jkJv8U=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\WhyUH\\OneDrive\\Desktop\\project-bolt-sb1- like netcut\\project\\native\\SkysNativeMeter\\SkysNativeMeter.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\WhyUH\\.nuget\\packages\\microsoft.net.illink.tasks\\9.0.0\\microsoft.net.illink.tasks.9.0.0.nupkg.sha512",
+    "C:\\Users\\WhyUH\\.nuget\\packages\\packetdotnet\\1.4.7\\packetdotnet.1.4.7.nupkg.sha512",
+    "C:\\Users\\WhyUH\\.nuget\\packages\\sharppcap\\6.3.0\\sharppcap.6.3.0.nupkg.sha512",
+    "C:\\Users\\WhyUH\\.nuget\\packages\\system.memory\\4.5.5\\system.memory.4.5.5.nupkg.sha512",
+    "C:\\Users\\WhyUH\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.0.0\\system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
+    "C:\\Users\\WhyUH\\.nuget\\packages\\system.text.encoding.codepages\\6.0.0\\system.text.encoding.codepages.6.0.0.nupkg.sha512",
+    "C:\\Users\\WhyUH\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\9.0.0\\microsoft.netcore.app.runtime.win-x64.9.0.0.nupkg.sha512",
+    "C:\\Users\\WhyUH\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\9.0.0\\microsoft.windowsdesktop.app.runtime.win-x64.9.0.0.nupkg.sha512",
+    "C:\\Users\\WhyUH\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\9.0.0\\microsoft.aspnetcore.app.runtime.win-x64.9.0.0.nupkg.sha512"
+  ],
+  "logs": []
+}

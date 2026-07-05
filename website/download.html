@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skys WiFi Cutter — Free LAN Network Manager for Windows</title>
+  <meta name="description" content="Free NetCut-style LAN manager for Windows. Scan devices, cut, lag switch, bandwidth monitor, hotspot control. No subscription." />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --accent: #3b82f6;
+      --accent2: #6366f1;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --warn: #fbbf24;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    header { text-align: center; margin-bottom: 2.5rem; }
+    .logo {
+      width: 88px; height: 88px; border-radius: 20px;
+      margin: 0 auto 1rem; box-shadow: 0 8px 32px rgba(59,130,246,.35);
+    }
+    h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); font-weight: 800; letter-spacing: -0.02em; }
+    .tagline { color: var(--muted); margin-top: 0.5rem; font-size: 1.05rem; }
+    .card {
+      background: rgba(30,41,59,.85);
+      border: 1px solid rgba(99,102,241,.25);
+      border-radius: 1.25rem;
+      padding: 1.75rem;
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(8px);
+    }
+    .download-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+      width: 100%; max-width: 420px;
+      padding: 1rem 1.5rem;
+      font-size: 1.125rem; font-weight: 700;
+      color: white; text-decoration: none;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 0.875rem;
+      box-shadow: 0 4px 24px rgba(59,130,246,.4);
+      transition: transform .15s, box-shadow .15s;
+    }
+    .download-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(59,130,246,.5); }
+    .meta { font-size: 0.875rem; color: var(--muted); margin-top: 0.75rem; }
+    .warn {
+      background: rgba(251,191,36,.12);
+      border: 1px solid rgba(251,191,36,.35);
+      border-radius: 0.75rem;
+      padding: 1rem 1.25rem;
+      font-size: 0.9rem;
+      color: #fde68a;
+      margin-top: 1.25rem;
+    }
+    h2 { font-size: 1.125rem; margin-bottom: 0.75rem; }
+    ul { padding-left: 1.25rem; color: var(--muted); }
+    li { margin-bottom: 0.35rem; }
+    .grid { display: grid; gap: 1rem; }
+    @media (min-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } }
+    footer { text-align: center; margin-top: 2rem; font-size: 0.8rem; color: var(--muted); }
+    code { background: rgba(0,0,0,.3); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <!-- Replace src with your hosted icon URL -->
+      <img class="logo" src="../public/icon.png" alt="Skys WiFi Cutter" width="88" height="88" />
+      <h1>Skys WiFi Cutter</h1>
+      <p class="tagline">Free LAN network manager for Windows — scan, cut, lag, bandwidth, hotspot</p>
+    </header>
+
+    <div class="card" style="text-align:center">
+      <h2>Download for Windows</h2>
+      <p style="color:var(--muted);margin-bottom:1.25rem">
+        Version <strong id="ver">4.4.0</strong> · Windows 10/11 · 64-bit · ~130 MB
+      </p>
+      <a class="download-btn" id="dl" href="https://github.com/joe25dill-a11y/skys-wifi-cutter/releases/latest">
+        ⬇ Download from GitHub Releases
+      </a>
+      <p class="meta">Requires Administrator · Npcap installs automatically if needed</p>
+      <div class="warn">
+        <strong>SmartScreen may warn</strong> — this build is not code-signed yet. Click <em>More info → Run anyway</em>.
+        Use only on networks you own. Unauthorized interference with others&apos; internet is illegal.
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Install steps</h2>
+        <ol style="padding-left:1.25rem;color:var(--muted)">
+          <li>Right-click installer → <strong>Run as administrator</strong></li>
+          <li>Allow Npcap if prompted</li>
+          <li>Launch from Start Menu</li>
+          <li>Complete setup wizard → Scan</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h2>Features</h2>
+        <ul>
+          <li>Device scan &amp; manufacturer lookup</li>
+          <li>Cut / restore / cut all</li>
+          <li>Lag switch &amp; speed limits</li>
+          <li>Per-device bandwidth</li>
+          <li>Hotspot freeze &amp; gaming mode</li>
+          <li>DNS &amp; port blocks</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Having issues?</h2>
+      <ul>
+        <li>Run as Administrator for cut/lag/hotspot</li>
+        <li>Reboot once after first install if scan fails</li>
+        <li>In app: <strong>Tools → Diagnostics → Copy feedback report</strong></li>
+      </ul>
+    </div>
+
+    <footer>
+      <p>Local-only · No cloud · No subscription · MIT License</p>
+      <p style="margin-top:0.5rem">Replace the download link above with your hosted <code>Skys WiFi Cutter Setup.exe</code></p>
+    </footer>
+  </div>
+</body>
+</html>

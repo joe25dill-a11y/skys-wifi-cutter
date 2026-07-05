@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows installer
+        run: npm run desktop:build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release with installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $tag = "v$version"
+          $installer = "$env:LOCALAPPDATA\SkysWiFiCutterBuild\Skys WiFi Cutter Setup $version.exe"
+          if (-not (Test-Path $installer)) { throw "Installer not found: $installer" }
+          gh release create $tag $installer `
+            --title "Skys WiFi Cutter v$version" `
+            --notes "Windows beta installer. Run as Administrator. SmartScreen may warn (unsigned)."
