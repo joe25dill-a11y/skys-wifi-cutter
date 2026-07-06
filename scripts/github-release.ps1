@@ -46,7 +46,7 @@ if (-not (Test-Path ".git")) {
   Write-Host "Initializing git repository..."
   git init -b main
   git add .
-  git commit -m "Skys WiFi Cutter v$version — public beta"
+  git commit -m "Skys WiFi Cutter v$version - public beta"
 }
 
 $remoteUrl = "https://github.com/$Owner/$Repo.git"
