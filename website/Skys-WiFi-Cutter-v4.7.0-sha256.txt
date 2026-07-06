@@ -1,8 +1,4 @@
-Skys WiFi Cutter v4.7.0 — SHA256 checksums
-Generated at release time via scripts/github-release.ps1
+﻿Skys WiFi Cutter v4.7.0 SHA256 checksum
 
-Skys.WiFi.Cutter.Setup.exe
-PLACEHOLDER — replace with actual SHA256 after building the installer
-
-Example:
-  certutil -hashfile Skys.WiFi.Cutter.Setup.exe SHA256
+File: Skys.WiFi.Cutter.Setup.exe
+SHA256: 0c0b292f41ac00bc53f0dcf463b831d75df4ad1bcabd5bd3303fe933a4f003ed

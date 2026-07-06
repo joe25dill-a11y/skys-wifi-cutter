@@ -105,7 +105,8 @@ Write-Host "Website checksum: $websiteChecksum"
 
 Write-Host "SHA256: $hash"
 
-if (gh release view $tag 2>$null) {
+gh release view $tag --repo "$Owner/$Repo" 2>$null | Out-Null
+if ($LASTEXITCODE -eq 0) {
   gh release upload $tag $installerLocal $checksumPath --clobber
   Write-Host "Updated assets on existing release $tag"
 } else {
