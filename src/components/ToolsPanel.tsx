@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Shield, ShieldOff, Scissors, RotateCcw, Check, X, Download, Upload } from 'lucide-react';
+import { useState } from 'react';
+import { Scissors, RotateCcw, Check, X, Download, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch } from '../config/api';
 import { Device, HealthResponse } from '../types/device';
@@ -13,6 +13,9 @@ import { RulesPanel } from './RulesPanel';
 import { GamePresetsPanel } from './GamePresetsPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
+import { DefensePanel } from './DefensePanel';
+import { SceneModesPanel } from './SceneModesPanel';
+import { NetworkIdentityPanel } from './NetworkIdentityPanel';
 import { CutTroubleshootingPanel } from './CutTroubleshootingPanel';
 
 interface ToolsPanelProps {
@@ -28,6 +31,8 @@ interface ToolsPanelProps {
 
 const TOOL_SECTIONS = [
   { id: 'tools-defense', label: 'Defense' },
+  { id: 'tools-scenes', label: 'Scenes' },
+  { id: 'tools-identity', label: 'MAC & VPN' },
   { id: 'tools-settings', label: 'Settings' },
   { id: 'tools-troubleshoot', label: 'Troubleshoot' },
   { id: 'tools-groups', label: 'Groups' },
@@ -67,37 +72,11 @@ export function ToolsPanel({
   onSettingsChange,
   onShowSetupAgain
 }: ToolsPanelProps) {
-  const [defenseActive, setDefenseActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'cutAll' | 'restoreAll' | null>(null);
 
   const localMac = health?.network?.mac?.toUpperCase();
   const cutTargetCount = devices.filter((d) => d.mac_address.toUpperCase() !== localMac).length;
-
-  useEffect(() => {
-    apiFetch<{ isActive: boolean }>('/defense/status')
-      .then((s) => setDefenseActive(s.isActive))
-      .catch(() => null);
-  }, []);
-
-  const toggleDefense = async () => {
-    setLoading(true);
-    try {
-      if (defenseActive) {
-        await apiFetch('/defense/disable', { method: 'POST' });
-        setDefenseActive(false);
-        toast.success('Network defense disabled');
-      } else {
-        await apiFetch('/defense/enable', { method: 'POST' });
-        setDefenseActive(true);
-        toast.success('Network defense enabled — gateway ARP pinned');
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Defense toggle failed');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const cutAll = async () => {
     if (!health?.checks?.cutReady) {
@@ -224,41 +203,39 @@ export function ToolsPanel({
         </div>
       </nav>
 
-      <div id="tools-defense" className="scroll-mt-28 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <button
-          onClick={() => setConfirmAction('cutAll')}
-          disabled={loading || cutTargetCount === 0}
-          className="flex items-center justify-center gap-2 py-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl font-bold text-lg"
-        >
-          <Scissors className="w-5 h-5" />
-          Cut All Devices
-        </button>
-        <button
-          onClick={() => setConfirmAction('restoreAll')}
-          disabled={loading}
-          className="flex items-center justify-center gap-2 py-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl font-bold text-lg"
-        >
-          <RotateCcw className="w-5 h-5" />
-          Restore All
-        </button>
-        <button
-          onClick={toggleDefense}
-          disabled={loading}
-          className={`flex items-center justify-center gap-2 py-4 rounded-xl font-bold text-lg disabled:opacity-50 ${
-            defenseActive
-              ? 'bg-blue-600 hover:bg-blue-700 text-white'
-              : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-900 dark:text-white'
-          }`}
-        >
-          {defenseActive ? <Shield className="w-5 h-5" /> : <ShieldOff className="w-5 h-5" />}
-          {defenseActive ? 'Defense ON' : 'Enable Defense'}
-        </button>
+      <div id="tools-defense" className="scroll-mt-28 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            onClick={() => setConfirmAction('cutAll')}
+            disabled={loading || cutTargetCount === 0}
+            className="flex items-center justify-center gap-2 py-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl font-bold text-lg"
+          >
+            <Scissors className="w-5 h-5" />
+            Cut All Devices
+          </button>
+          <button
+            onClick={() => setConfirmAction('restoreAll')}
+            disabled={loading}
+            className="flex items-center justify-center gap-2 py-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl font-bold text-lg"
+          >
+            <RotateCcw className="w-5 h-5" />
+            Restore All
+          </button>
+        </div>
+        <DefensePanel health={health} onHealthRefresh={onHealthRefresh} />
       </div>
 
-      <p className="text-sm text-slate-600 dark:text-slate-400">
-        <strong>Defense</strong> pins your router&apos;s MAC address so other NetCut users on your
-        LAN can&apos;t easily cut you. Like NetCut&apos;s &quot;Defend&quot; feature.
-      </p>
+      <div id="tools-scenes" className="scroll-mt-28">
+        <SceneModesPanel
+          devices={devices}
+          onDevicesChange={onDevicesChange}
+          onHealthRefresh={onHealthRefresh}
+        />
+      </div>
+
+      <div id="tools-identity" className="scroll-mt-28">
+        <NetworkIdentityPanel />
+      </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
         <div className="p-4 border-b border-slate-200 dark:border-slate-700">

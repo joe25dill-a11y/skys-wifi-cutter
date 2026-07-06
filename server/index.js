@@ -55,6 +55,23 @@ import { sendWakeOnLan } from './services/wakeOnLan.js';
 import { exportAppData, importAppData } from './services/settingsExport.js';
 import { evaluateBandwidthAlerts, getLastAlerts } from './services/bandwidthAlerts.js';
 import { evaluateAutomationRules } from './services/rulesEngine.js';
+import {
+  startArpAttackMonitor,
+  stopArpAttackMonitor,
+  getArpAttackAlerts,
+  clearArpAttackAlerts,
+  getArpMonitorStatus
+} from './services/arpAttackMonitor.js';
+import { getScenes, applyScene } from './services/sceneModes.js';
+import {
+  listNetworkAdapters,
+  randomizeAdapterMac,
+  setAdapterMac,
+  getVpnStatus,
+  connectVpn,
+  disconnectVpn,
+  getIdentitySummary
+} from './services/networkIdentity.js';
 import { startMitmMonitor, stopMitmMonitor, getMitmIssues } from './services/mitmMonitor.js';
 import { getRules, addRule, deleteRule, updateRule } from './storage/rulesStore.js';
 import { getGamePresets, getGamePreset } from './services/gamePresets.js';
@@ -247,6 +264,7 @@ app.get('/api/health', async (req, res) => {
     firewallKills: firewallKill.getActive(),
     flowTracking: flowTracker.getStatus(),
     defense: networkDefense.getStatus(),
+    arpMonitor: getArpMonitorStatus(),
     checks
   });
 });
@@ -1122,6 +1140,98 @@ app.post('/api/defense/disable', async (req, res, next) => {
   }
 });
 
+app.post('/api/defense/repin', async (req, res, next) => {
+  try {
+    const gateway = await networkDefense.pinGatewayArp();
+    res.json({ success: true, gateway, status: networkDefense.getStatus() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/defense/arp-alerts', (req, res) => {
+  res.json({ alerts: getArpAttackAlerts(), monitor: getArpMonitorStatus() });
+});
+
+app.post('/api/defense/arp-alerts/clear', (req, res) => {
+  clearArpAttackAlerts();
+  res.json({ success: true });
+});
+
+app.get('/api/scenes', (req, res) => {
+  res.json({ scenes: getScenes() });
+});
+
+app.post('/api/scenes/:id/apply', async (req, res, next) => {
+  try {
+    const result = await applyScene(req.params.id, req.body || {});
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/identity/summary', async (req, res, next) => {
+  try {
+    res.json(await getIdentitySummary());
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/identity/adapters', async (req, res, next) => {
+  try {
+    res.json(await listNetworkAdapters());
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/identity/mac/randomize', async (req, res, next) => {
+  try {
+    const adapterName = String(req.body.adapterName || '');
+    if (!adapterName) throw new ValidationError('adapterName required', 'adapterName');
+    res.json(await randomizeAdapterMac(adapterName));
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/identity/mac/set', async (req, res, next) => {
+  try {
+    const adapterName = String(req.body.adapterName || '');
+    const mac = String(req.body.mac || '');
+    if (!adapterName || !mac) throw new ValidationError('adapterName and mac required', 'adapterName');
+    res.json(await setAdapterMac(adapterName, mac));
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/identity/vpn', async (req, res, next) => {
+  try {
+    res.json(await getVpnStatus());
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/identity/vpn/:name/connect', async (req, res, next) => {
+  try {
+    res.json(await connectVpn(req.params.name));
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/identity/vpn/:name/disconnect', async (req, res, next) => {
+  try {
+    res.json(await disconnectVpn(req.params.name));
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.post('/api/devices/:mac/toggle', async (req, res, next) => {
   try {
     const mac = validateMAC(req.params.mac);
@@ -1869,7 +1979,7 @@ app.get('/api/alerts', async (req, res, next) => {
   try {
     res.json({
       bandwidth: getLastAlerts(),
-      mitm: [...getMitmIssues(), ...getGatewayDriftAlerts()]
+      mitm: [...getMitmIssues(), ...getGatewayDriftAlerts(), ...getArpAttackAlerts()]
     });
   } catch (err) {
     next(err);
@@ -1955,6 +2065,21 @@ async function bootstrap() {
   startMitmMonitor();
   startGatewayDriftMonitor();
 
+  try {
+    const settings = await getSettings();
+    if (settings.autoDefenseOnStartup) {
+      await networkDefense.enable();
+      logger.info('Auto-enabled network defense on startup');
+    }
+    if (settings.arpAttackMonitorEnabled !== false) {
+      startArpAttackMonitor().catch((err) => {
+        logger.warn(`ARP attack monitor not started: ${err.message}`);
+      });
+    }
+  } catch (error) {
+    logger.warn(`Defense bootstrap skipped: ${error.message}`);
+  }
+
   bandwidthHistoryTimer = setInterval(async () => {
     try {
       const total = await bandwidthMonitor.getTotalBandwidth();
@@ -2023,6 +2148,7 @@ export async function shutdown() {
   }
   ruleScheduler.stop();
   stopMitmMonitor();
+  stopArpAttackMonitor();
 
   await runFullRuntimeCleanup({
     hotspotController,

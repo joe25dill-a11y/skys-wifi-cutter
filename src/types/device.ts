@@ -86,7 +86,15 @@ export interface HealthResponse {
   } | null;
   activeCuts: number;
   restoredCutsCount?: number;
-  defense?: { isActive: boolean; gatewayIp: string | null; gatewayMac: string | null };
+  defense?: {
+    isActive: boolean;
+    gatewayIp: string | null;
+    gatewayMac: string | null;
+    lastPinAt?: string | null;
+    lastPinError?: string | null;
+    pinCount?: number;
+  };
+  arpMonitor?: { active: boolean; ready: boolean; lastError: string | null; alertCount: number };
   activeSpeedLimits?: number;
   speedLimits?: { mac: string; uploadKbps: number; downloadKbps: number }[];
   lagSwitches?: { mac: string; outgoingMs?: number; incomingMs?: number }[];

@@ -4,6 +4,12 @@ import { Sparkles, X } from 'lucide-react';
 const VERSION_KEY = 'skys-last-seen-version';
 
 const HIGHLIGHTS: Record<string, string[]> = {
+  '4.12.0': [
+    'Cut Defender panel — router MAC, re-pin, ARP attack listener with alerts',
+    'Scene modes — Focus, Peace, Homework, Gaming host, Guest cap',
+    'MAC spoofer + Windows VPN connect/disconnect (use alongside Nord/WireGuard apps)',
+    'Auto-enable defense on startup (Settings)'
+  ],
   '4.11.0': [
     'Settings — tune alert Mbps threshold and live poll interval',
     'Phone remote — lag + speed cap from phone; offline QR; LAN ready / restart chip',

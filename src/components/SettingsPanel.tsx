@@ -18,6 +18,8 @@ export interface AppSettings {
   defaultHotspotPassword: string;
   gamingModeLagMs: number;
   gamingModePulseIntervalSec: number;
+  autoDefenseOnStartup: boolean;
+  arpAttackMonitorEnabled: boolean;
 }
 
 const DEFAULTS: AppSettings = {
@@ -33,7 +35,9 @@ const DEFAULTS: AppSettings = {
   defaultHotspotSsid: 'Xbox-LagControl',
   defaultHotspotPassword: '',
   gamingModeLagMs: 120,
-  gamingModePulseIntervalSec: 30
+  gamingModePulseIntervalSec: 30,
+  autoDefenseOnStartup: false,
+  arpAttackMonitorEnabled: true
 };
 
 interface SettingsPanelProps {
@@ -163,6 +167,26 @@ export function SettingsPanel({ onSettingsChange, onShowSetupAgain }: SettingsPa
               onChange={(e) => update('preferWinDivertForHotspot', e.target.checked)}
             />
             <span>Prefer WinDivert for hotspot freeze/lag (fallback: firewall/ARP)</span>
+          </label>
+        </section>
+
+        <section className="space-y-3">
+          <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">Defense</h4>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.autoDefenseOnStartup}
+              onChange={(e) => update('autoDefenseOnStartup', e.target.checked)}
+            />
+            <span>Auto-enable Cut Defender when app starts</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.arpAttackMonitorEnabled}
+              onChange={(e) => update('arpAttackMonitorEnabled', e.target.checked)}
+            />
+            <span>ARP attack listener (needs Npcap — restart app after change)</span>
           </label>
         </section>
 

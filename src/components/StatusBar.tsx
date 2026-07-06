@@ -8,6 +8,7 @@ interface StatusBarProps {
   deviceCount: number;
   onlineCount?: number;
   onOpenTroubleshoot?: () => void;
+  onOpenDefense?: () => void;
 }
 
 function Chip({
@@ -46,7 +47,7 @@ function Chip({
   );
 }
 
-export function StatusBar({ health, deviceCount, onlineCount = 0, onOpenTroubleshoot }: StatusBarProps) {
+export function StatusBar({ health, deviceCount, onlineCount = 0, onOpenTroubleshoot, onOpenDefense }: StatusBarProps) {
   const [remoteEnabled, setRemoteEnabled] = useState(false);
   const checks = health?.checks;
   const version = health?.version ?? '3.1.0';
@@ -106,7 +107,12 @@ export function StatusBar({ health, deviceCount, onlineCount = 0, onOpenTroubles
             label={checks?.flowReady ? 'Per-device BW' : 'BW monitor'}
             detail={checks?.flowBlockReason || 'Flow tracking + MITM meter'}
           />
-          <Chip ok={defenseActive} label={defenseActive ? 'Defense ON' : 'Defense off'} detail="Gateway ARP pinned" />
+          <Chip
+            ok={defenseActive}
+            label={defenseActive ? 'Defense ON' : 'Defense off'}
+            detail="Gateway ARP pinned — click to open defender"
+            onClick={onOpenDefense}
+          />
           <Chip
             ok={remoteEnabled}
             label={remoteEnabled ? 'Remote ON' : 'Remote off'}

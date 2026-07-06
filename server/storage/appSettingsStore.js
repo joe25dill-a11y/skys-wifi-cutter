@@ -24,7 +24,9 @@ function buildDefaults() {
     defaultHotspotSsid: 'Xbox-LagControl',
     defaultHotspotPassword: generateHotspotPassword(12),
     gamingModeLagMs: 120,
-    gamingModePulseIntervalSec: 30
+    gamingModePulseIntervalSec: 30,
+    autoDefenseOnStartup: false,
+    arpAttackMonitorEnabled: true
   };
 }
 
@@ -36,7 +38,9 @@ const BOOLEAN_KEYS = new Set([
   'minimizeToTrayOnClose',
   'stopHotspotOnQuit',
   'preferWinDivertForHotspot',
-  'powerSaverMode'
+  'powerSaverMode',
+  'autoDefenseOnStartup',
+  'arpAttackMonitorEnabled'
 ]);
 
 function clampInt(value, min, max, fallback) {

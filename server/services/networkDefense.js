@@ -85,6 +85,9 @@ export class NetworkDefense {
     this.interval = null;
     this.gatewayIp = null;
     this.gatewayMac = null;
+    this.lastPinAt = null;
+    this.lastPinError = null;
+    this.pinCount = 0;
   }
 
   async resolveGateway() {
@@ -127,16 +130,24 @@ export class NetworkDefense {
   }
 
   async pinGatewayArp() {
-    const gateway = await this.resolveGateway();
+    try {
+      const gateway = await this.resolveGateway();
 
-    if (process.platform === 'win32') {
-      await execAsync(`arp -s ${gateway.ip} ${gateway.mac.replace(/:/g, '-')}`);
-    } else {
-      await execAsync(`sudo arp -s ${gateway.ip} ${gateway.mac}`);
+      if (process.platform === 'win32') {
+        await execAsync(`arp -s ${gateway.ip} ${gateway.mac.replace(/:/g, '-')}`);
+      } else {
+        await execAsync(`sudo arp -s ${gateway.ip} ${gateway.mac}`);
+      }
+
+      this.lastPinAt = new Date().toISOString();
+      this.lastPinError = null;
+      this.pinCount += 1;
+      logger.info(`Pinned gateway ARP: ${gateway.ip} -> ${gateway.mac}`);
+      return gateway;
+    } catch (error) {
+      this.lastPinError = error.message;
+      throw error;
     }
-
-    logger.info(`Pinned gateway ARP: ${gateway.ip} -> ${gateway.mac}`);
-    return gateway;
   }
 
   async unpinGatewayArp() {
@@ -192,7 +203,10 @@ export class NetworkDefense {
     return {
       isActive: this.isActive,
       gatewayIp: this.gatewayIp,
-      gatewayMac: this.gatewayMac
+      gatewayMac: this.gatewayMac,
+      lastPinAt: this.lastPinAt,
+      lastPinError: this.lastPinError,
+      pinCount: this.pinCount
     };
   }
 }

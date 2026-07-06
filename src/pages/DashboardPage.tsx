@@ -354,6 +354,13 @@ export const DashboardPage: React.FC = () => {
     }, 100);
   };
 
+  const openDefense = () => {
+    setTab('tools');
+    setTimeout(() => {
+      document.getElementById('tools-defense')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
+
   const exportCsv = () => {
     window.open(`${API_BASE_URL}/devices/export`, '_blank');
     toast.success('Downloading device list…');
@@ -1124,6 +1131,7 @@ export const DashboardPage: React.FC = () => {
           deviceCount={devices.length}
           onlineCount={onlineCount}
           onOpenTroubleshoot={openTroubleshoot}
+          onOpenDefense={openDefense}
         />
 
         <NetworkPanel />
