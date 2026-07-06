@@ -1,0 +1,4 @@
+﻿Skys WiFi Cutter v4.11.0 SHA256 checksum
+
+File: Skys.WiFi.Cutter.Setup.exe
+SHA256: 81df8f3b9843bd2b644bbe6a024563a41df9ab5da60798b42fc159b7a2341644
