@@ -46,6 +46,7 @@ import { SchedulePanel } from '../components/SchedulePanel';
 import { NetworkMap } from '../components/NetworkMap';
 import { Device, BandwidthResponse, HealthResponse, DeviceBandwidth } from '../types/device';
 import { apiFetch, API_BASE_URL, encodeMac } from '../config/api';
+import { useVisibilityPoll } from '../hooks/useVisibilityPoll';
 
 const AUTO_REFRESH_KEY = 'netcut-auto-refresh';
 const DEVICE_SORT_KEY = 'netcut-device-sort';
@@ -516,32 +517,42 @@ export const DashboardPage: React.FC = () => {
   }, [runScan]);
 
   const powerSaver = appSettings?.powerSaverMode ?? false;
-  const livePollMs = powerSaver ? 20_000 : appSettings?.livePollMs ?? LIVE_POLL_MS;
+  const livePollActiveMs =
+    tab === 'devices' || tab === 'bandwidth' || tab === 'tools'
+      ? powerSaver
+        ? 20_000
+        : appSettings?.livePollMs ?? LIVE_POLL_MS
+      : powerSaver
+        ? 60_000
+        : 45_000;
 
-  useEffect(() => {
-    const shouldPollLive = () => {
-      if (document.hidden) return false;
-      if (powerSaver && tab !== 'devices' && tab !== 'bandwidth') return false;
-      return tab === 'devices' || tab === 'bandwidth' || tab === 'tools';
-    };
+  const shouldPollLive =
+    tab === 'devices' || tab === 'bandwidth' || tab === 'tools' || !powerSaver;
 
-    const tick = () => {
-      if (!shouldPollLive()) return;
+  useVisibilityPoll(
+    () => {
       fetchBandwidthLive();
       fetchHealth();
-    };
+    },
+    {
+      enabled: shouldPollLive,
+      visibleMs: livePollActiveMs,
+      hiddenMs: null,
+      runOnMount: true
+    }
+  );
 
-    tick();
-    const interval = setInterval(tick, livePollMs);
-    const onVisibility = () => {
-      if (!document.hidden) tick();
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [tab, powerSaver, livePollMs]);
+  useVisibilityPoll(
+    () => {
+      lightRefresh();
+    },
+    {
+      enabled: autoRefresh && (tab === 'devices' || !powerSaver),
+      visibleMs: AUTO_REFRESH_MS,
+      hiddenMs: null,
+      runOnMount: false
+    }
+  );
 
   useEffect(() => {
     apiFetch<{ groups: { name: string; macs: string[] }[] }>('/groups')
@@ -841,17 +852,23 @@ export const DashboardPage: React.FC = () => {
   useEffect(() => {
     if (meteringMacs.size === 0) return;
     if (tab !== 'devices' && tab !== 'bandwidth') return;
-    const interval = setInterval(() => fetchBandwidth(), 2000);
-    return () => clearInterval(interval);
+    const tick = () => {
+      if (document.hidden) return;
+      fetchBandwidth();
+    };
+    tick();
+    const interval = setInterval(tick, 2000);
+    const onVis = () => {
+      if (!document.hidden) tick();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [meteringMacs.size, tab]);
 
-  useEffect(() => {
-    if (!autoRefresh) return;
-    if (document.hidden) return;
-    if (powerSaver && tab !== 'devices') return;
-    const interval = setInterval(() => lightRefresh(), AUTO_REFRESH_MS);
-    return () => clearInterval(interval);
-  }, [autoRefresh, lightRefresh, tab, powerSaver]);
+  // auto-refresh handled by useVisibilityPoll above
 
   if (isLoading) {
     return (
@@ -868,7 +885,10 @@ export const DashboardPage: React.FC = () => {
       {showSetup && (
         <SetupWizard
           health={health}
-          onComplete={() => setShowSetup(false)}
+          onComplete={() => {
+            setShowSetup(false);
+            toast.success('Setup complete — pick a device for Cut, Speed, or Lag');
+          }}
           onScan={() => runScan({ silent: true })}
           onTestCut={async () => {
             setShowSetup(false);

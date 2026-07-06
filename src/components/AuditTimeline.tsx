@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { apiFetch } from '../config/api';
+import { useVisibilityPoll } from '../hooks/useVisibilityPoll';
 
 import { actionLabel } from '../utils/auditLabels';
 
@@ -37,15 +38,20 @@ const ACTION_COLORS: Record<string, string> = {
 export function AuditTimeline() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
 
-  useEffect(() => {
-    const load = () =>
+  const load = useCallback(
+    () =>
       apiFetch<{ entries: AuditEntry[] }>('/audit?limit=30')
         .then((d) => setEntries(d.entries))
-        .catch(() => null);
-    load();
-    const timer = setInterval(load, 45_000);
-    return () => clearInterval(timer);
-  }, []);
+        .catch(() => null),
+    []
+  );
+
+  useVisibilityPoll(load, {
+    enabled: true,
+    visibleMs: 45_000,
+    hiddenMs: null,
+    runOnMount: true
+  });
 
   if (entries.length === 0) {
     return (

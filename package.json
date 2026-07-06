@@ -1,7 +1,7 @@
 {
   "name": "skys-wifi-cutter",
   "private": true,
-  "version": "4.10.2",
+  "version": "4.10.3",
   "description": "Skys WiFi Cutter — free LAN network manager",
   "author": "Skys WiFi Cutter",
   "type": "module",

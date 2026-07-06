@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Activity, AlertTriangle, ClipboardCopy, ExternalLink, RefreshCw, ShieldOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch, API_BASE_URL } from '../config/api';
 import { ConfirmModal } from './ConfirmModal';
+import { useVisibilityPoll } from '../hooks/useVisibilityPoll';
 
 interface DashboardItem {
   id: string;
@@ -63,13 +64,12 @@ export function DiagnosticsPanel() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-    const interval = window.setInterval(() => {
-      if (!document.hidden) load();
-    }, 20_000);
-    return () => clearInterval(interval);
-  }, [load]);
+  useVisibilityPoll(load, {
+    enabled: true,
+    visibleMs: 30_000,
+    hiddenMs: null,
+    runOnMount: true
+  });
 
   const panic = async () => {
     setPanicLoading(true);

@@ -111,11 +111,11 @@ export function HotspotHub() {
       })
       .catch(() => null);
 
-    let interval = window.setInterval(refresh, 10_000);
+    let interval = window.setInterval(refresh, 15_000);
 
     const onVisibility = () => {
       clearInterval(interval);
-      const ms = document.hidden ? 30_000 : 10_000;
+      const ms = document.hidden ? 60_000 : 15_000;
       if (!document.hidden) {
         refresh();
       }

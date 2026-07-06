@@ -4,6 +4,11 @@ import { Sparkles, X } from 'lucide-react';
 const VERSION_KEY = 'skys-last-seen-version';
 
 const HIGHLIGHTS: Record<string, string[]> = {
+  '4.10.3': [
+    'Polished first-run setup — readiness checklist, tab tour, update & diagnostics tips',
+    'Smarter idle — polling pauses when app is minimized; slower on WiFi/Hotspot tabs',
+    'Alerts and audit logs refresh only while the window is visible'
+  ],
   '4.10.2': [
     'Honest health — status bar shows Python fallback and real issues instead of silent failures',
     'Port block verifies native engine actually started before showing success',

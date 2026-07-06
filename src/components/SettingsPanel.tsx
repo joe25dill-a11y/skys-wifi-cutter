@@ -124,7 +124,7 @@ export function SettingsPanel({ onSettingsChange, onShowSetupAgain }: SettingsPa
               checked={settings.powerSaverMode}
               onChange={(e) => update('powerSaverMode', e.target.checked)}
             />
-            <span>Power saver — slower background polling</span>
+            <span>Power saver — extra-slow polling on non-Devices tabs (app already pauses when minimized)</span>
           </label>
         </section>
 

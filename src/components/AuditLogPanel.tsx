@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ClipboardList, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch } from '../config/api';
+import { useVisibilityPoll } from '../hooks/useVisibilityPoll';
 
 interface AuditEntry {
   id: number;
@@ -16,16 +17,17 @@ export function AuditLogPanel() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const data = await apiFetch<{ entries: AuditEntry[] }>('/audit?limit=50');
     setEntries(data.entries);
-  };
-
-  useEffect(() => {
-    load().catch(() => null);
-    const timer = setInterval(() => load().catch(() => null), 60_000);
-    return () => clearInterval(timer);
   }, []);
+
+  useVisibilityPoll(() => load().catch(() => null), {
+    enabled: true,
+    visibleMs: 60_000,
+    hiddenMs: null,
+    runOnMount: true
+  });
 
   const clear = async () => {
     if (!confirm('Clear audit log?')) return;

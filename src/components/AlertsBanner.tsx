@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { apiFetch } from '../config/api';
+import { useVisibilityPoll } from '../hooks/useVisibilityPoll';
 
 interface BandwidthAlert {
   type: string;
@@ -21,29 +22,38 @@ export function AlertsBanner() {
   const [mitm, setMitm] = useState<MitmIssue[]>([]);
   const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await apiFetch<{ bandwidth: BandwidthAlert[]; mitm: MitmIssue[] }>('/alerts');
-        const bw = data.bandwidth || [];
-        const mitmIssues = data.mitm || [];
-        setBandwidth(bw);
-        setMitm(mitmIssues);
-        const messages = [...mitmIssues.map((m) => m.message), ...bw.map((b) => b.message)];
-        if (messages.length > 0 && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          new Notification('Skys WiFi Cutter', { body: messages[0] });
-        }
-      } catch {
-        // ignore
+  const load = useCallback(async () => {
+    try {
+      const data = await apiFetch<{ bandwidth: BandwidthAlert[]; mitm: MitmIssue[] }>('/alerts');
+      const bw = data.bandwidth || [];
+      const mitmIssues = data.mitm || [];
+      setBandwidth(bw);
+      setMitm(mitmIssues);
+      const messages = [...mitmIssues.map((m) => m.message), ...bw.map((b) => b.message)];
+      if (
+        messages.length > 0 &&
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'granted'
+      ) {
+        new Notification('Skys WiFi Cutter', { body: messages[0] });
       }
-    };
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => null);
     }
-    load();
-    const timer = setInterval(load, 30_000);
-    return () => clearInterval(timer);
   }, []);
+
+  useVisibilityPoll(() => load().catch(() => null), {
+    enabled: true,
+    visibleMs: 45_000,
+    hiddenMs: null,
+    runOnMount: true
+  });
 
   const items = [...mitm.map((m) => m.message), ...bandwidth.map((b) => b.message)];
   if (dismissed || items.length === 0) return null;
