@@ -127,6 +127,32 @@ export class DeviceController {
     return { success: true, count, message: `Restored ${count} device(s)` };
   }
 
+  async bulkCut(macs = []) {
+    let count = 0;
+    for (const rawMac of macs) {
+      const mac = normalizeMac(rawMac);
+      const device = await deviceStore.getByMac(mac);
+      if (!device || device.status === 'blocked') continue;
+      await this.blockDevice(mac, device.ip_address);
+      await deviceStore.updateStatus(mac, 'blocked');
+      count += 1;
+    }
+    return { success: true, count, message: `Cut ${count} device(s)` };
+  }
+
+  async bulkRestore(macs = []) {
+    let count = 0;
+    for (const rawMac of macs) {
+      const mac = normalizeMac(rawMac);
+      const device = await deviceStore.getByMac(mac);
+      if (!device || device.status !== 'blocked') continue;
+      await this.unblockDevice(mac, device.ip_address);
+      await deviceStore.updateStatus(mac, 'allowed');
+      count += 1;
+    }
+    return { success: true, count, message: `Restored ${count} device(s)` };
+  }
+
   getBlockedDevices() {
     return Array.from(this.blockedDevices);
   }

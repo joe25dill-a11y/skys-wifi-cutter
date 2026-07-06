@@ -4,6 +4,12 @@ import { Sparkles, X } from 'lucide-react';
 const VERSION_KEY = 'skys-last-seen-version';
 
 const HIGHLIGHTS: Record<string, string[]> = {
+  '4.11.0': [
+    'Settings — tune alert Mbps threshold and live poll interval',
+    'Phone remote — lag + speed cap from phone; offline QR; LAN ready / restart chip',
+    'Rules — edit in place, last-fired time, Run now button',
+    'Bulk cut/restore uses one fast API call; nicer confirm dialogs everywhere'
+  ],
   '4.10.3': [
     'Polished first-run setup — readiness checklist, tab tour, update & diagnostics tips',
     'Smarter idle — polling pauses when app is minimized; slower on WiFi/Hotspot tabs',

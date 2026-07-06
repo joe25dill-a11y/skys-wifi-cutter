@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Smartphone, Wifi, WifiOff, Scissors, RotateCcw, ExternalLink, Copy, AlertCircle } from 'lucide-react';
+import { Smartphone, Wifi, WifiOff, Scissors, RotateCcw, ExternalLink, Copy, AlertCircle, Gauge, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch } from '../config/api';
+import { Device, HealthResponse } from '../types/device';
+import { QrCode } from './QrCode';
 
 interface RemoteStatus {
   version: string;
@@ -12,7 +14,12 @@ interface RemoteStatus {
   cutCount: number;
 }
 
-export function RemoteControlPanel() {
+interface RemoteControlPanelProps {
+  devices: Device[];
+  health: HealthResponse | null;
+}
+
+export function RemoteControlPanel({ devices, health }: RemoteControlPanelProps) {
   const [enabled, setEnabled] = useState(false);
   const [pinSet, setPinSet] = useState(false);
   const [newPin, setNewPin] = useState('');
@@ -21,6 +28,10 @@ export function RemoteControlPanel() {
   const [targetMac, setTargetMac] = useState('');
   const [saving, setSaving] = useState(false);
   const [pcIp, setPcIp] = useState('');
+
+  const remote = health?.remote;
+  const needsRestart = remote?.needsRestart;
+  const listeningOk = remote?.enabled && remote?.listening;
 
   useEffect(() => {
     apiFetch<{ remoteControlEnabled: boolean; remotePinSet: boolean }>('/settings')
@@ -33,6 +44,12 @@ export function RemoteControlPanel() {
       .then((h) => setPcIp(h.network?.ip || ''))
       .catch(() => null);
   }, []);
+
+  useEffect(() => {
+    if (devices.length && !targetMac) {
+      setTargetMac(devices[0].mac_address);
+    }
+  }, [devices, targetMac]);
 
   const remotePageUrl = pcIp ? `http://${pcIp}:3001/remote` : '';
 
@@ -134,24 +151,67 @@ export function RemoteControlPanel() {
     }
   };
 
+  const applyLag = async () => {
+    if (!targetMac) return;
+    try {
+      await remoteFetch(`/remote/devices/${encodeURIComponent(targetMac)}/lag`, {
+        method: 'POST',
+        body: JSON.stringify({ lagMs: 150 })
+      });
+      toast.success('150ms lag applied');
+      await refreshStatus();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Lag failed');
+    }
+  };
+
+  const limitSpeed = async () => {
+    if (!targetMac) return;
+    try {
+      await remoteFetch(`/remote/devices/${encodeURIComponent(targetMac)}/limit-speed`, {
+        method: 'POST',
+        body: JSON.stringify({ uploadKbps: 512, downloadKbps: 512 })
+      });
+      toast.success('512 kbps speed cap applied');
+      await refreshStatus();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Speed limit failed');
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <Smartphone className="w-5 h-5 text-indigo-500" />
         <h3 className="font-semibold text-slate-900 dark:text-white">Phone Remote Control</h3>
+        {remote?.enabled && (
+          <span
+            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+              listeningOk
+                ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                : needsRestart
+                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                  : 'bg-slate-500/20 text-slate-500'
+            }`}
+          >
+            {listeningOk ? 'LAN ready' : needsRestart ? 'Restart needed' : 'Off'}
+          </span>
+        )}
       </div>
       <p className="text-xs text-slate-500">
         Off by default. Enable, set a PIN (4+ digits), save, then <strong>restart the app</strong> so phones on
         your LAN can connect.
       </p>
 
-      <div className="rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/60 p-3 text-xs text-amber-900 dark:text-amber-100 flex gap-2">
-        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-        <p>
-          <strong>Restart required:</strong> after enabling or changing remote settings, fully quit and relaunch
-          Skys WiFi Cutter (tray → Quit, then open again).
-        </p>
-      </div>
+      {needsRestart && (
+        <div className="rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/60 p-3 text-xs text-amber-900 dark:text-amber-100 flex gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <p>
+            <strong>Restart required:</strong> remote is {remote?.enabled ? 'enabled' : 'disabled'} but the server
+            is still on {remote?.listening ? 'LAN' : 'localhost only'}. Quit from tray → reopen the app.
+          </p>
+        </div>
+      )}
 
       <div className="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 space-y-2">
         <p className="text-xs font-medium text-slate-600 dark:text-slate-300">Phone URL (same WiFi/LAN)</p>
@@ -177,14 +237,12 @@ export function RemoteControlPanel() {
               </a>
             </div>
             <div className="shrink-0 text-center">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(remotePageUrl)}`}
-                alt="QR code for remote URL"
-                width={120}
-                height={120}
+              <QrCode
+                value={remotePageUrl}
+                size={120}
                 className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white p-1"
               />
-              <p className="text-[10px] text-slate-500 mt-1">Scan on phone</p>
+              <p className="text-[10px] text-slate-500 mt-1">Scan on phone (offline QR)</p>
             </div>
           </div>
         ) : (
@@ -238,7 +296,9 @@ export function RemoteControlPanel() {
 
       {status && (
         <div className="text-xs bg-slate-50 dark:bg-slate-900 rounded-lg p-3 space-y-1">
-          <p>v{status.version} · {status.deviceCount} devices · {status.cutCount} cut</p>
+          <p>
+            v{status.version} · {status.deviceCount} devices · {status.cutCount} cut
+          </p>
           <p>
             Hotspot: {status.hotspotActive ? (status.hotspotFrozen ? 'FROZEN' : 'ON') : 'OFF'} ·{' '}
             {status.connectedClients} client(s)
@@ -263,19 +323,53 @@ export function RemoteControlPanel() {
         </button>
       </div>
 
-      <div className="flex gap-2">
-        <input
+      <div className="space-y-2">
+        <select
           value={targetMac}
           onChange={(e) => setTargetMac(e.target.value)}
-          placeholder="MAC to cut/restore"
-          className="flex-1 px-3 py-2 rounded-lg border dark:bg-slate-700 text-sm font-mono"
-        />
-        <button onClick={cutDevice} className="p-2 rounded-lg bg-red-100 text-red-700" title="Cut">
-          <Scissors className="w-4 h-4" />
-        </button>
-        <button onClick={restoreDevice} className="p-2 rounded-lg bg-green-100 text-green-700" title="Restore">
-          <RotateCcw className="w-4 h-4" />
-        </button>
+          className="w-full px-3 py-2 rounded-lg border dark:bg-slate-700 text-sm"
+        >
+          <option value="">Select device…</option>
+          {devices.map((d) => (
+            <option key={d.mac_address} value={d.mac_address}>
+              {d.name} — {d.ip_address}
+            </option>
+          ))}
+        </select>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={cutDevice}
+            disabled={!targetMac}
+            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-red-100 text-red-700 text-xs font-medium disabled:opacity-50"
+          >
+            <Scissors className="w-3.5 h-3.5" />
+            Cut
+          </button>
+          <button
+            onClick={restoreDevice}
+            disabled={!targetMac}
+            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-100 text-green-700 text-xs font-medium disabled:opacity-50"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Restore
+          </button>
+          <button
+            onClick={applyLag}
+            disabled={!targetMac}
+            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-purple-100 text-purple-700 text-xs font-medium disabled:opacity-50"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            Lag 150ms
+          </button>
+          <button
+            onClick={limitSpeed}
+            disabled={!targetMac}
+            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-100 text-blue-700 text-xs font-medium disabled:opacity-50"
+          >
+            <Gauge className="w-3.5 h-3.5" />
+            Cap 512k
+          </button>
+        </div>
       </div>
     </div>
   );

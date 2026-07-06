@@ -424,15 +424,19 @@ export const DashboardPage: React.FC = () => {
     const count = selectedMacs.size;
     const macsToCut = [...selectedMacs];
     lastBulkCutMacsRef.current = macsToCut;
-    for (const mac of macsToCut) {
-      try {
-        await handleToggleDevice(mac);
-      } catch {
-        // continue
-      }
+    try {
+      const result = await apiFetch<{ devices: Device[]; count: number }>('/devices/bulk-cut', {
+        method: 'POST',
+        body: JSON.stringify({ macs: macsToCut })
+      });
+      setDevices(result.devices);
+      setSelectedMacs(new Set());
+      toast.success(`Cut ${result.count ?? count} selected device${count === 1 ? '' : 's'}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Bulk cut failed');
+      setConfirmAction(null);
+      return;
     }
-    setSelectedMacs(new Set());
-    toast.success(`Cut ${count} selected device${count === 1 ? '' : 's'}`);
     toast(
       (t) => (
         <span className="flex items-center gap-2 text-sm">
@@ -440,14 +444,16 @@ export const DashboardPage: React.FC = () => {
           <button
             onClick={async () => {
               toast.dismiss(t.id);
-              for (const mac of lastBulkCutMacsRef.current) {
-                const device = devices.find((d) => d.mac_address === mac);
-                if (device?.status === 'blocked') {
-                  try {
-                    await handleToggleDevice(mac);
-                  } catch {
-                    // continue
-                  }
+              const undoMacs = lastBulkCutMacsRef.current;
+              if (undoMacs.length > 0) {
+                try {
+                  const result = await apiFetch<{ devices: Device[] }>('/devices/bulk-restore', {
+                    method: 'POST',
+                    body: JSON.stringify({ macs: undoMacs })
+                  });
+                  setDevices(result.devices);
+                } catch {
+                  // fallback ignored
                 }
               }
               lastBulkCutMacsRef.current = [];
@@ -468,18 +474,18 @@ export const DashboardPage: React.FC = () => {
 
   const handleBulkRestore = async () => {
     if (selectedMacs.size === 0) return;
-    for (const mac of selectedMacs) {
-      const device = devices.find((d) => d.mac_address === mac);
-      if (device?.status === 'blocked') {
-        try {
-          await handleToggleDevice(mac);
-        } catch {
-          // continue
-        }
-      }
+    const macs = [...selectedMacs];
+    try {
+      const result = await apiFetch<{ devices: Device[]; count: number }>('/devices/bulk-restore', {
+        method: 'POST',
+        body: JSON.stringify({ macs })
+      });
+      setDevices(result.devices);
+      setSelectedMacs(new Set());
+      toast.success(`Restored ${result.count ?? macs.length} device(s)`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Bulk restore failed');
     }
-    setSelectedMacs(new Set());
-    toast.success('Bulk restore applied');
     await fetchHealth();
     setConfirmAction(null);
   };

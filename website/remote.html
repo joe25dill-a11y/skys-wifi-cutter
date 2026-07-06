@@ -79,8 +79,8 @@
     }
     .badge-cut { background: rgba(220,38,38,.2); color: #fca5a5; }
     .badge-ok { background: rgba(22,163,74,.2); color: #86efac; }
-    .actions { display: flex; gap: 0.35rem; }
-    .actions button { width: auto; padding: 0.45rem 0.65rem; font-size: 0.75rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: flex-end; }
+    .actions button { width: auto; padding: 0.35rem 0.5rem; font-size: 0.65rem; }
     .hidden { display: none; }
     .hotspot-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; }
   </style>
@@ -201,6 +201,8 @@
             <span class="badge ${cut ? 'badge-cut' : 'badge-ok'}">${cut ? 'cut' : 'ok'}</span>
             <button class="btn-danger" data-action="cut" data-mac="${escapeAttr(d.mac)}">Cut</button>
             <button class="btn-ok" data-action="restore" data-mac="${escapeAttr(d.mac)}">Restore</button>
+            <button class="btn-ghost" data-action="lag" data-mac="${escapeAttr(d.mac)}">Lag</button>
+            <button class="btn-ghost" data-action="limit-speed" data-mac="${escapeAttr(d.mac)}">512k</button>
           </div>`;
         devicesEl.appendChild(row);
       }
@@ -261,10 +263,13 @@
       if (!btn) return;
       const mac = btn.dataset.mac;
       const action = btn.dataset.action;
+      let body = '{}';
+      if (action === 'lag') body = JSON.stringify({ lagMs: 150 });
+      if (action === 'limit-speed') body = JSON.stringify({ uploadKbps: 512, downloadKbps: 512 });
       try {
         await remoteFetch(state.host, state.pin, `/devices/${encodeURIComponent(mac)}/${action}`, {
           method: 'POST',
-          body: '{}'
+          body
         });
         await refresh();
       } catch (err) {

@@ -3,6 +3,7 @@ import { Gamepad2, ShieldOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch, encodeMac } from '../config/api';
 import { Device } from '../types/device';
+import { ConfirmModal } from './ConfirmModal';
 
 interface GamePreset {
   id: string;
@@ -37,6 +38,8 @@ export function GamePresetsPanel({
   const [presets, setPresets] = useState<GamePreset[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
   const [useLag, setUseLag] = useState(false);
+  const [confirmApply, setConfirmApply] = useState<GamePreset | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   useEffect(() => {
     apiFetch<{ presets: GamePreset[] }>('/game-presets')
@@ -44,19 +47,8 @@ export function GamePresetsPanel({
       .catch(() => null);
   }, []);
 
-  const apply = async (preset: GamePreset) => {
-    if (!device) {
-      toast.error('Select a device first');
-      return;
-    }
-
-    const action = useLag
-      ? `Apply ${preset.lagMs}ms lag to ${device.name}?`
-      : `Block ${preset.label} ports on ${device.name}?`;
-    if (!confirm(action)) {
-      return;
-    }
-
+  const applyPreset = async (preset: GamePreset) => {
+    if (!device) return;
     setLoading(preset.id);
     try {
       const result = await apiFetch<{ message: string }>(
@@ -72,13 +64,12 @@ export function GamePresetsPanel({
       toast.error(err instanceof Error ? err.message : 'Preset failed');
     } finally {
       setLoading(null);
+      setConfirmApply(null);
     }
   };
 
   const removeBlock = async () => {
     if (!device) return;
-    if (!confirm(`Remove port block from ${device.name}?`)) return;
-
     setLoading('remove');
     try {
       const result = await apiFetch<{ message: string }>(
@@ -91,6 +82,7 @@ export function GamePresetsPanel({
       toast.error(err instanceof Error ? err.message : 'Remove failed');
     } finally {
       setLoading(null);
+      setConfirmRemove(false);
     }
   };
 
@@ -127,7 +119,7 @@ export function GamePresetsPanel({
             {portBlock?.ports?.length ? ` (${portBlock.ports.length} ports)` : ''}
           </div>
           <button
-            onClick={removeBlock}
+            onClick={() => setConfirmRemove(true)}
             disabled={loading === 'remove'}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-400 text-amber-800 dark:text-amber-200 text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50"
           >
@@ -152,7 +144,13 @@ export function GamePresetsPanel({
         {presets.map((p) => (
           <button
             key={p.id}
-            onClick={() => apply(p)}
+            onClick={() => {
+              if (!device) {
+                toast.error('Select a device first');
+                return;
+              }
+              setConfirmApply(p);
+            }}
             disabled={!device || loading === p.id}
             className="text-left p-3 rounded-lg border border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20 disabled:opacity-50"
           >
@@ -164,6 +162,34 @@ export function GamePresetsPanel({
           </button>
         ))}
       </div>
+
+      <ConfirmModal
+        open={Boolean(confirmApply && device)}
+        title="Apply game preset?"
+        confirmLabel="Apply"
+        message={
+          confirmApply && device ? (
+            <p>
+              {useLag
+                ? `Apply ${confirmApply.lagMs}ms lag to ${device.name}?`
+                : `Block ${confirmApply.label} ports on ${device.name}?`}
+            </p>
+          ) : null
+        }
+        onConfirm={() => {
+          if (confirmApply) void applyPreset(confirmApply);
+        }}
+        onCancel={() => setConfirmApply(null)}
+      />
+      <ConfirmModal
+        open={confirmRemove && Boolean(device)}
+        title="Remove port block?"
+        danger
+        confirmLabel="Remove"
+        message={device ? <p>Remove port block from {device.name}?</p> : null}
+        onConfirm={removeBlock}
+        onCancel={() => setConfirmRemove(false)}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Zap, Plus, Trash2 } from 'lucide-react';
+import { Zap, Plus, Trash2, Pencil, Play, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch } from '../config/api';
 import { Device } from '../types/device';
@@ -12,6 +12,8 @@ interface Rule {
   thresholdMbps: number;
   action: 'cut' | 'uncut' | 'lag';
   lagMs?: number;
+  lastTriggeredAt?: string;
+  lastTriggeredMbps?: number;
 }
 
 export function RulesPanel({ devices }: { devices: Device[] }) {
@@ -21,6 +23,8 @@ export function RulesPanel({ devices }: { devices: Device[] }) {
   const [condition, setCondition] = useState<'above_mbps' | 'below_mbps'>('above_mbps');
   const [action, setAction] = useState<'cut' | 'uncut' | 'lag'>('cut');
   const [lagMs, setLagMs] = useState(150);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [evaluating, setEvaluating] = useState(false);
 
   const load = () =>
     apiFetch<{ rules: Rule[] }>('/rules')
@@ -31,32 +35,66 @@ export function RulesPanel({ devices }: { devices: Device[] }) {
     load();
   }, []);
 
-  const addRule = async () => {
+  const resetForm = () => {
+    setEditingId(null);
+    setMac('');
+    setThresholdMbps(50);
+    setCondition('above_mbps');
+    setAction('cut');
+    setLagMs(150);
+  };
+
+  const startEdit = (rule: Rule) => {
+    setEditingId(rule.id);
+    setMac(rule.mac);
+    setThresholdMbps(rule.thresholdMbps);
+    setCondition(rule.condition);
+    setAction(rule.action);
+    setLagMs(rule.lagMs ?? 150);
+  };
+
+  const saveRule = async () => {
     if (!mac) {
-      toast.error('Pick a device MAC');
+      toast.error('Pick a device');
       return;
     }
     try {
-      await apiFetch('/rules', {
-        method: 'POST',
-        body: JSON.stringify({
-          mac,
-          condition,
-          thresholdMbps,
-          action,
-          lagMs: action === 'lag' ? lagMs : undefined
-        })
-      });
-      toast.success('Rule added');
+      if (editingId) {
+        await apiFetch(`/rules/${editingId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            mac,
+            condition,
+            thresholdMbps,
+            action,
+            lagMs: action === 'lag' ? lagMs : undefined
+          })
+        });
+        toast.success('Rule updated');
+      } else {
+        await apiFetch('/rules', {
+          method: 'POST',
+          body: JSON.stringify({
+            mac,
+            condition,
+            thresholdMbps,
+            action,
+            lagMs: action === 'lag' ? lagMs : undefined
+          })
+        });
+        toast.success('Rule added');
+      }
+      resetForm();
       await load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Add rule failed');
+      toast.error(err instanceof Error ? err.message : 'Save failed');
     }
   };
 
   const removeRule = async (id: string) => {
     try {
       await apiFetch(`/rules/${id}`, { method: 'DELETE' });
+      if (editingId === id) resetForm();
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Delete failed');
@@ -76,14 +114,44 @@ export function RulesPanel({ devices }: { devices: Device[] }) {
     }
   };
 
+  const evaluateNow = async () => {
+    setEvaluating(true);
+    try {
+      const result = await apiFetch<{ fired: { ruleId: string; action: string }[]; rules: Rule[] }>(
+        '/rules/evaluate-now',
+        { method: 'POST' }
+      );
+      setRules(result.rules);
+      if (result.fired.length === 0) {
+        toast.success('No rules matched current bandwidth');
+      } else {
+        toast.success(`${result.fired.length} rule(s) fired`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Evaluate failed');
+    } finally {
+      setEvaluating(false);
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <Zap className="w-5 h-5 text-amber-500" />
-        <h3 className="font-semibold text-slate-900 dark:text-white">Automation Rules</h3>
+      <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Zap className="w-5 h-5 text-amber-500" />
+          <h3 className="font-semibold text-slate-900 dark:text-white">Automation Rules</h3>
+        </div>
+        <button
+          onClick={evaluateNow}
+          disabled={evaluating || rules.length === 0}
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber-400 text-amber-700 dark:text-amber-300 text-xs font-medium disabled:opacity-50"
+        >
+          <Play className="w-3.5 h-3.5" />
+          {evaluating ? 'Checking…' : 'Run now'}
+        </button>
       </div>
       <p className="text-xs text-slate-500 mb-3">
-        Auto-cut or lag when bandwidth crosses a threshold (checked every 5 min).
+        Auto-cut or lag when bandwidth crosses a threshold (checked every 5 min, or Run now).
       </p>
 
       <div className="grid grid-cols-2 gap-2 mb-3 text-sm">
@@ -137,45 +205,73 @@ export function RulesPanel({ devices }: { devices: Device[] }) {
           </label>
         )}
       </div>
-      <button
-        onClick={addRule}
-        className="w-full py-2 rounded-lg bg-amber-600 text-white text-sm font-medium flex items-center justify-center gap-1"
-      >
-        <Plus className="w-4 h-4" />
-        Add rule
-      </button>
+      <div className="flex gap-2 mb-3">
+        <button
+          onClick={saveRule}
+          className="flex-1 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium flex items-center justify-center gap-1"
+        >
+          <Plus className="w-4 h-4" />
+          {editingId ? 'Update rule' : 'Add rule'}
+        </button>
+        {editingId && (
+          <button
+            onClick={resetForm}
+            className="px-3 py-2 rounded-lg border text-sm"
+            title="Cancel edit"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
 
-      <div className="mt-4 space-y-2 max-h-40 overflow-y-auto text-xs">
+      <div className="mt-4 space-y-2 max-h-48 overflow-y-auto text-xs">
         {rules.length === 0 ? (
           <p className="text-slate-500 text-center py-2">No rules yet</p>
         ) : (
           rules.map((r) => (
             <div
               key={r.id}
-              className={`flex items-center justify-between gap-2 py-1.5 border-b border-slate-100 dark:border-slate-700 ${
+              className={`py-2 border-b border-slate-100 dark:border-slate-700 ${
                 r.enabled ? '' : 'opacity-50'
-              }`}
+              } ${editingId === r.id ? 'bg-amber-500/10 -mx-1 px-1 rounded' : ''}`}
             >
-              <span className="font-mono truncate">
-                {r.condition === 'above_mbps' ? '>' : '<'} {r.thresholdMbps} Mbps → {r.action}
-                {r.action === 'lag' && r.lagMs ? ` (${r.lagMs}ms)` : ''}
-              </span>
-              <span className="text-slate-400 truncate">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono truncate">
+                  {r.condition === 'above_mbps' ? '>' : '<'} {r.thresholdMbps} Mbps → {r.action}
+                  {r.action === 'lag' && r.lagMs ? ` (${r.lagMs}ms)` : ''}
+                </span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => startEdit(r)}
+                    className="p-1 text-slate-500 hover:text-blue-500"
+                    title="Edit"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => toggleEnabled(r)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                      r.enabled
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40'
+                        : 'bg-slate-200 text-slate-600 dark:bg-slate-700'
+                    }`}
+                  >
+                    {r.enabled ? 'On' : 'Off'}
+                  </button>
+                  <button onClick={() => removeRule(r.id)} className="text-red-500">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+              <p className="text-slate-400 truncate mt-0.5">
                 {devices.find((d) => d.mac_address === r.mac)?.name ?? r.mac}
-              </span>
-              <button
-                onClick={() => toggleEnabled(r)}
-                className={`px-2 py-0.5 rounded text-[10px] font-medium shrink-0 ${
-                  r.enabled
-                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40'
-                    : 'bg-slate-200 text-slate-600 dark:bg-slate-700'
-                }`}
-              >
-                {r.enabled ? 'On' : 'Off'}
-              </button>
-              <button onClick={() => removeRule(r.id)} className="text-red-500 shrink-0">
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+                {r.lastTriggeredAt && (
+                  <span className="ml-2 text-slate-500">
+                    · last fired {new Date(r.lastTriggeredAt).toLocaleString()}
+                    {r.lastTriggeredMbps != null ? ` @ ${r.lastTriggeredMbps.toFixed(1)} Mbps` : ''}
+                  </span>
+                )}
+              </p>
             </div>
           ))
         )}

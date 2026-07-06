@@ -1,4 +1,4 @@
-import { getRules } from '../storage/rulesStore.js';
+import { getRules, updateRule } from '../storage/rulesStore.js';
 import { deviceController } from './deviceController.js';
 import { lagController } from './lagController.js';
 import { logAudit } from '../storage/auditLogStore.js';
@@ -51,6 +51,7 @@ export async function evaluateAutomationRules(perDevice = []) {
         logAudit('rule_lag', { mac, detail: { ruleId: rule.id, lagMs, mbps } });
       }
       lastFired.set(key, Date.now());
+      await updateRule(rule.id, { lastTriggeredAt: new Date().toISOString(), lastTriggeredMbps: mbps });
       fired.push({ ruleId: rule.id, action: rule.action, mac: rule.mac, mbps });
     } catch (error) {
       logger.warn(`Rule ${rule.id} failed: ${error.message}`);

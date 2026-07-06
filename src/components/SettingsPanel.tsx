@@ -202,6 +202,31 @@ export function SettingsPanel({ onSettingsChange, onShowSetupAgain }: SettingsPa
             />
             <span>Bandwidth spike alerts</span>
           </label>
+          <label className="block">
+            <span className="text-slate-500 text-xs">Alert when any device exceeds (Mbps)</span>
+            <input
+              type="number"
+              min={1}
+              max={10000}
+              disabled={!settings.bandwidthAlertsEnabled}
+              className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-transparent px-3 py-2 disabled:opacity-50"
+              value={settings.bandwidthAlertMbps}
+              onChange={(e) => update('bandwidthAlertMbps', Number(e.target.value))}
+            />
+          </label>
+          <label className="block">
+            <span className="text-slate-500 text-xs">Live refresh interval on Devices tab (ms)</span>
+            <input
+              type="number"
+              min={5000}
+              max={60000}
+              step={1000}
+              className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-transparent px-3 py-2"
+              value={settings.livePollMs}
+              onChange={(e) => update('livePollMs', Number(e.target.value))}
+            />
+            <span className="text-[11px] text-slate-400">5s–60s · power saver & hidden window still slow/pause polling</span>
+          </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"

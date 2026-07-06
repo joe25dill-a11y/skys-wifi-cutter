@@ -1,7 +1,7 @@
 {
   "name": "skys-wifi-cutter",
   "private": true,
-  "version": "4.10.3",
+  "version": "4.11.0",
   "description": "Skys WiFi Cutter — free LAN network manager",
   "author": "Skys WiFi Cutter",
   "type": "module",
@@ -39,6 +39,7 @@
     "lucide-react": "^0.344.0",
     "netmask": "^2.0.2",
     "oui-data": "^1.1.428",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.6.0",
@@ -48,6 +49,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",

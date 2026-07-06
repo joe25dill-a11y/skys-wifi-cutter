@@ -182,7 +182,14 @@ export function ToolsPanel({
           method: 'POST',
           body: JSON.stringify(payload)
         });
-        toast.success('Settings imported — refresh to see changes');
+        toast.success('Settings imported');
+        onHealthRefresh?.();
+        try {
+          const settings = await apiFetch<import('./SettingsPanel').AppSettings>('/settings');
+          onSettingsChange?.(settings);
+        } catch {
+          // ignore
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Import failed');
       }
@@ -306,11 +313,12 @@ export function ToolsPanel({
         </div>
       </div>
 
-      <div id="tools-settings" className="scroll-mt-28 grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div id="tools-settings" className="scroll-mt-28">
         <SettingsPanel onSettingsChange={onSettingsChange} onShowSetupAgain={onShowSetupAgain} />
-        <div id="tools-diagnostics">
-          <DiagnosticsPanel />
-        </div>
+      </div>
+
+      <div id="tools-diagnostics" className="scroll-mt-28">
+        <DiagnosticsPanel />
       </div>
 
       <div id="tools-troubleshoot" className="scroll-mt-28">
@@ -329,7 +337,7 @@ export function ToolsPanel({
       </div>
 
       <div id="tools-remote" className="scroll-mt-28 grid grid-cols-1 md:grid-cols-2 gap-4">
-        <RemoteControlPanel />
+        <RemoteControlPanel devices={devices} health={health} />
         <div id="tools-rules">
           <RulesPanel devices={devices} />
         </div>

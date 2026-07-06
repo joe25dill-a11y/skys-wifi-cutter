@@ -3,6 +3,7 @@ import { FolderOpen, Plus, Scissors, RotateCcw, Trash2, UserPlus, X, ChevronDown
 import toast from 'react-hot-toast';
 import { apiFetch, encodeMac } from '../config/api';
 import { Device } from '../types/device';
+import { ConfirmModal } from './ConfirmModal';
 
 interface DeviceGroup {
   id: string;
@@ -24,6 +25,7 @@ export function GroupsPanel({ devices, onDevicesChange }: GroupsPanelProps) {
   const [pickMac, setPickMac] = useState<Record<string, string>>({});
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
 
   const load = async () => {
     const data = await apiFetch<{ groups: DeviceGroup[] }>('/groups');
@@ -69,10 +71,10 @@ export function GroupsPanel({ devices, onDevicesChange }: GroupsPanelProps) {
   };
 
   const deleteGroup = async (id: string) => {
-    if (!confirm('Delete this group?')) return;
     await apiFetch(`/groups/${id}`, { method: 'DELETE' });
     await load();
     toast.success('Group deleted');
+    setDeleteGroupId(null);
   };
 
   const addMac = async (groupId: string) => {
@@ -239,7 +241,7 @@ export function GroupsPanel({ devices, onDevicesChange }: GroupsPanelProps) {
                   </button>
                   {!group.builtin && (
                     <button
-                      onClick={() => deleteGroup(group.id)}
+                      onClick={() => setDeleteGroupId(group.id)}
                       className="p-1.5 rounded border text-slate-500"
                       title="Delete group"
                     >
@@ -308,6 +310,18 @@ export function GroupsPanel({ devices, onDevicesChange }: GroupsPanelProps) {
           );
         })}
       </div>
+
+      <ConfirmModal
+        open={Boolean(deleteGroupId)}
+        title="Delete group?"
+        danger
+        confirmLabel="Delete"
+        message={<p>Delete this group? Devices are not cut or removed from the network.</p>}
+        onConfirm={() => {
+          if (deleteGroupId) void deleteGroup(deleteGroupId);
+        }}
+        onCancel={() => setDeleteGroupId(null)}
+      />
     </div>
   );
 }

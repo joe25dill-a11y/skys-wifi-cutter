@@ -96,5 +96,10 @@ export interface HealthResponse {
   oneWayKills?: { mac: string }[];
   firewallKills?: { mac: string; ipAddress?: string }[];
   flowTracking?: FlowTrackingStatus;
+  remote?: {
+    enabled: boolean;
+    listening: boolean;
+    needsRestart: boolean;
+  };
   checks: SystemChecks;
 }

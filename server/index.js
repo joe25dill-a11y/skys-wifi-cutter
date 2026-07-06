@@ -54,8 +54,8 @@ import { firewallKill } from './services/firewallKill.js';
 import { sendWakeOnLan } from './services/wakeOnLan.js';
 import { exportAppData, importAppData } from './services/settingsExport.js';
 import { evaluateBandwidthAlerts, getLastAlerts } from './services/bandwidthAlerts.js';
-import { startMitmMonitor, stopMitmMonitor, getMitmIssues } from './services/mitmMonitor.js';
 import { evaluateAutomationRules } from './services/rulesEngine.js';
+import { startMitmMonitor, stopMitmMonitor, getMitmIssues } from './services/mitmMonitor.js';
 import { getRules, addRule, deleteRule, updateRule } from './storage/rulesStore.js';
 import { getGamePresets, getGamePreset } from './services/gamePresets.js';
 import { requireRemotePin } from './middleware/remoteAuth.js';
@@ -113,6 +113,11 @@ function parseTargetMacs(body) {
   return body.targetMacs.map((m) => validateMAC(m));
 }
 let bandwidthHistoryTimer = null;
+let currentListenHost = '127.0.0.1';
+
+export function getListenHost() {
+  return currentListenHost;
+}
 
 function buildPerDeviceBandwidth(devices, arpMaps) {
   return resolvePerDeviceBandwidth(
@@ -204,6 +209,15 @@ app.get('/api/health', async (req, res) => {
   const operationalNotes = buildOperationalNotes(checks);
   const isHealthy = checks.cutReady && checks.warnings.length === 0 && operationalNotes.length === 0;
 
+  let remoteSettings = { remoteControlEnabled: false };
+  try {
+    remoteSettings = await getSettings();
+  } catch {
+    // ignore
+  }
+  const remoteListening = currentListenHost === '0.0.0.0';
+  const remoteEnabled = Boolean(remoteSettings.remoteControlEnabled);
+
   res.json({
     status: isHealthy ? 'ok' : 'degraded',
     degradedReason: !checks.cutReady
@@ -219,6 +233,11 @@ app.get('/api/health', async (req, res) => {
       : null,
     activeCuts: arpSpoofer.getActiveCuts().length,
     restoredCutsCount,
+    remote: {
+      enabled: remoteEnabled,
+      listening: remoteListening,
+      needsRestart: remoteEnabled !== remoteListening
+    },
     speedLimits: deviceController.getActiveSpeedLimits(),
     lagSwitches: lagController.getActiveLags(),
     dnsLocks: dnsHijack.getActiveMacs(),
@@ -686,8 +705,22 @@ app.delete('/api/rules/:id', async (req, res, next) => {
 
 app.patch('/api/rules/:id', async (req, res, next) => {
   try {
-    const rules = await updateRule(req.params.id, req.body);
+    const patch = { ...req.body };
+    if (patch.mac) patch.mac = validateMAC(patch.mac);
+    const rules = await updateRule(req.params.id, patch);
     res.json({ rules });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/rules/evaluate-now', async (req, res, next) => {
+  try {
+    const devices = await deviceStore.getAll();
+    const arpMaps = await getArpMaps();
+    const perDevice = buildPerDeviceBandwidth(devices, arpMaps);
+    const fired = await evaluateAutomationRules(perDevice);
+    res.json({ fired, rules: (await getRules()).rules });
   } catch (err) {
     next(err);
   }
@@ -774,6 +807,65 @@ app.post('/api/remote/devices/:mac/restore', requireRemotePin, async (req, res, 
   }
 });
 
+app.post('/api/remote/devices/:mac/lag', requireRemotePin, async (req, res, next) => {
+  try {
+    const mac = validateMAC(req.params.mac);
+    const device = await deviceStore.getByMac(mac);
+    if (!device) throw new ValidationError('Device not found', 'mac');
+    const ip = validateIP(device.ip_address);
+    const lagMs = validateLagValue(req.body.lagMs || 150, 'lagMs');
+    await lagController.applyLag(mac, ip, lagMs, lagMs);
+    logAudit('lag_applied', { mac, ip, detail: { remote: true, lagMs } });
+    res.json({ success: true, lagMs });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/remote/devices/:mac/remove-lag', requireRemotePin, async (req, res, next) => {
+  try {
+    const mac = validateMAC(req.params.mac);
+    const device = await deviceStore.getByMac(mac);
+    if (!device) throw new ValidationError('Device not found', 'mac');
+    const ip = validateIP(device.ip_address);
+    await lagController.removeLag(mac, ip);
+    logAudit('lag_removed', { mac, ip, detail: { remote: true } });
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/remote/devices/:mac/limit-speed', requireRemotePin, async (req, res, next) => {
+  try {
+    const mac = validateMAC(req.params.mac);
+    const device = await deviceStore.getByMac(mac);
+    if (!device) throw new ValidationError('Device not found', 'mac');
+    const ip = validateIP(device.ip_address);
+    const uploadKbps = validateBandwidth(req.body.uploadKbps ?? 512, 'uploadKbps');
+    const downloadKbps = validateBandwidth(req.body.downloadKbps ?? 512, 'downloadKbps');
+    await deviceController.limitDeviceBandwidth(mac, ip, uploadKbps, downloadKbps);
+    logAudit('speed_limit', { mac, ip, detail: { remote: true, uploadKbps, downloadKbps } });
+    res.json({ success: true, uploadKbps, downloadKbps });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/remote/devices/:mac/remove-speed-limit', requireRemotePin, async (req, res, next) => {
+  try {
+    const mac = validateMAC(req.params.mac);
+    const device = await deviceStore.getByMac(mac);
+    if (!device) throw new ValidationError('Device not found', 'mac');
+    const ip = validateIP(device.ip_address);
+    await deviceController.removeSpeedLimit(mac, ip);
+    logAudit('speed_limit_removed', { mac, ip, detail: { remote: true } });
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.post('/api/devices/:mac/port-unblock', async (req, res, next) => {
   try {
     const mac = validateMAC(req.params.mac);
@@ -848,6 +940,34 @@ app.post('/api/devices/restore-all', async (req, res, next) => {
   try {
     const devices = await deviceStore.getAll();
     const result = await deviceController.restoreAll(devices);
+    const updated = await deviceStore.getAll();
+    res.json({ ...result, devices: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/devices/bulk-cut', async (req, res, next) => {
+  try {
+    const macs = Array.isArray(req.body.macs) ? req.body.macs.map((m) => validateMAC(m)) : [];
+    if (macs.length === 0) {
+      throw new ValidationError('macs array required', 'macs');
+    }
+    const result = await deviceController.bulkCut(macs);
+    const updated = await deviceStore.getAll();
+    res.json({ ...result, devices: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/devices/bulk-restore', async (req, res, next) => {
+  try {
+    const macs = Array.isArray(req.body.macs) ? req.body.macs.map((m) => validateMAC(m)) : [];
+    if (macs.length === 0) {
+      throw new ValidationError('macs array required', 'macs');
+    }
+    const result = await deviceController.bulkRestore(macs);
     const updated = await deviceStore.getAll();
     res.json({ ...result, devices: updated });
   } catch (err) {
@@ -1876,6 +1996,7 @@ export async function startServer(port = PORT) {
   return new Promise((resolve, reject) => {
     const server = app.listen(port, host, () => {
       activeServer = server;
+      currentListenHost = host;
       logger.info(`Skys WiFi Cutter server running on http://${host}:${port}`);
       logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
       if (host === '127.0.0.1') {

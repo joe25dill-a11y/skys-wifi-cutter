@@ -3,6 +3,7 @@ import { ClipboardList, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch } from '../config/api';
 import { useVisibilityPoll } from '../hooks/useVisibilityPoll';
+import { ConfirmModal } from './ConfirmModal';
 
 interface AuditEntry {
   id: number;
@@ -16,6 +17,7 @@ interface AuditEntry {
 export function AuditLogPanel() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const load = useCallback(async () => {
     const data = await apiFetch<{ entries: AuditEntry[] }>('/audit?limit=50');
@@ -30,7 +32,6 @@ export function AuditLogPanel() {
   });
 
   const clear = async () => {
-    if (!confirm('Clear audit log?')) return;
     setLoading(true);
     try {
       await apiFetch('/audit', { method: 'DELETE' });
@@ -40,6 +41,7 @@ export function AuditLogPanel() {
       toast.error(err instanceof Error ? err.message : 'Clear failed');
     } finally {
       setLoading(false);
+      setConfirmClear(false);
     }
   };
 
@@ -51,7 +53,7 @@ export function AuditLogPanel() {
           <h3 className="font-semibold text-slate-900 dark:text-white">Connection Audit Log</h3>
         </div>
         <button
-          onClick={clear}
+          onClick={() => setConfirmClear(true)}
           disabled={loading || entries.length === 0}
           className="text-xs flex items-center gap-1 text-slate-500 hover:text-red-500"
         >
@@ -70,9 +72,7 @@ export function AuditLogPanel() {
               className="flex justify-between gap-2 py-1.5 border-b border-slate-100 dark:border-slate-700"
             >
               <span className="font-mono text-indigo-600 dark:text-indigo-400">{entry.action}</span>
-              <span className="text-slate-500 truncate">
-                {entry.mac || entry.ip || ''}
-              </span>
+              <span className="text-slate-500 truncate">{entry.mac || entry.ip || ''}</span>
               <span className="text-slate-400 whitespace-nowrap">
                 {new Date(entry.createdAt).toLocaleString()}
               </span>
@@ -80,6 +80,16 @@ export function AuditLogPanel() {
           ))
         )}
       </div>
+
+      <ConfirmModal
+        open={confirmClear}
+        title="Clear audit log?"
+        danger
+        confirmLabel="Clear"
+        message={<p>Permanently clear all audit log entries?</p>}
+        onConfirm={clear}
+        onCancel={() => setConfirmClear(false)}
+      />
     </div>
   );
 }
