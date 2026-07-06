@@ -47,6 +47,7 @@ interface HotspotStatus {
   clients?: HotspotClient[];
   constantLagActive?: boolean;
   constantLagMs?: number;
+  constantLagDropPercent?: number;
   bandwidthCap?: { uploadKbps: number; downloadKbps: number } | null;
   ssidPresets?: SsidPreset[];
   hostIp?: string;
@@ -76,6 +77,7 @@ export function HotspotHub() {
   const [loading, setLoading] = useState(false);
   const [selectedMacs, setSelectedMacs] = useState<Set<string>>(new Set());
   const [lagMs, setLagMs] = useState(150);
+  const [dropPercent, setDropPercent] = useState(0);
   const [capUpload, setCapUpload] = useState(512);
   const [capDownload, setCapDownload] = useState(2048);
   const [pulseCount, setPulseCount] = useState(8);
@@ -92,6 +94,8 @@ export function HotspotHub() {
       if (data.selectedTargetMacs?.length) {
         setSelectedMacs(new Set(data.selectedTargetMacs));
       }
+      if (data.constantLagMs) setLagMs(data.constantLagMs);
+      if (data.constantLagDropPercent != null) setDropPercent(data.constantLagDropPercent);
     } catch {
       // server not running
     }
@@ -289,9 +293,10 @@ export function HotspotHub() {
       } else {
         await apiFetch('/hotspot/constant-lag/start', {
           method: 'POST',
-          body: JSON.stringify({ lagMs, ...targetBody(targets) })
+          body: JSON.stringify({ lagMs, dropPercent, ...targetBody(targets) })
         });
-        toast.success(`Constant lag — ${lagMs}ms`);
+        const dropNote = dropPercent > 0 ? ` + ${dropPercent}% drop` : '';
+        toast.success(`Constant lag — ${lagMs}ms${dropNote}`);
       }
       await refresh();
     } catch (err) {
@@ -647,6 +652,59 @@ export function HotspotHub() {
             ))}
           </div>
 
+          <div className="rounded-xl p-4 border border-orange-500/40 bg-orange-900/25">
+            <h3 className="font-bold text-orange-200 mb-1 flex items-center gap-2 text-sm">
+              <Activity className="w-4 h-4" />
+              Network shaping (clumsy-style)
+            </h3>
+            <p className="text-xs text-orange-200/70 mb-3">
+              WinDivert lag + optional packet loss on {targetingLabel}
+              {status.constantLagActive && (
+                <span className="ml-2 text-emerald-300 font-semibold">
+                  LIVE · {status.constantLagMs ?? lagMs}ms
+                  {(status.constantLagDropPercent ?? 0) > 0
+                    ? ` · ${status.constantLagDropPercent}% drop`
+                    : ''}
+                </span>
+              )}
+            </p>
+            <div className="space-y-3 mb-3">
+              <label className="block text-xs text-orange-200">
+                Lag delay: <strong className="text-white">{lagMs}ms</strong>
+                <input
+                  type="range"
+                  min={50}
+                  max={2000}
+                  step={25}
+                  value={lagMs}
+                  onChange={(e) => setLagMs(parseInt(e.target.value, 10))}
+                  className="w-full mt-1 accent-orange-500"
+                />
+              </label>
+              <label className="block text-xs text-orange-200">
+                Packet drop: <strong className="text-white">{dropPercent}%</strong>
+                <input
+                  type="range"
+                  min={0}
+                  max={80}
+                  step={5}
+                  value={dropPercent}
+                  onChange={(e) => setDropPercent(parseInt(e.target.value, 10))}
+                  className="w-full mt-1 accent-red-500"
+                />
+              </label>
+            </div>
+            <button
+              onClick={toggleConstantLag}
+              disabled={loading}
+              className={`w-full py-3 rounded-xl font-bold text-sm ${
+                status.constantLagActive ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-orange-600 hover:bg-orange-500'
+              }`}
+            >
+              {status.constantLagActive ? 'Stop shaping' : 'Start lag + drop'}
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
@@ -689,32 +747,7 @@ export function HotspotHub() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-xl p-4 border border-orange-500/30 bg-orange-900/20">
-              <h3 className="font-bold text-orange-200 mb-2 flex items-center gap-2 text-sm">
-                <Activity className="w-4 h-4" />
-                Constant Lag
-              </h3>
-              <input
-                type="number"
-                value={lagMs}
-                onChange={(e) => setLagMs(parseInt(e.target.value, 10))}
-                className="w-full px-3 py-2 mb-2 rounded bg-slate-900/60 border border-orange-400/30 text-sm"
-                min={50}
-                max={2000}
-                step={50}
-              />
-              <button
-                onClick={toggleConstantLag}
-                disabled={loading}
-                className={`w-full py-2.5 rounded-lg font-bold text-sm ${
-                  status.constantLagActive ? 'bg-emerald-600' : 'bg-orange-600'
-                }`}
-              >
-                {status.constantLagActive ? 'Stop constant lag' : 'Start constant lag'}
-              </button>
-            </div>
-            <div className="rounded-xl p-4 border border-cyan-500/30 bg-cyan-900/20">
+          <div className="rounded-xl p-4 border border-cyan-500/30 bg-cyan-900/20">
               <h3 className="font-bold text-cyan-200 mb-2 flex items-center gap-2 text-sm">
                 <Gauge className="w-4 h-4" />
                 Bandwidth Cap (Kbps)
@@ -748,7 +781,6 @@ export function HotspotHub() {
                 )}
               </div>
             </div>
-          </div>
 
           <div className="rounded-xl p-4 border border-purple-500/40 bg-purple-900/25">
             <h3 className="font-bold text-purple-200 mb-1 flex items-center gap-2 text-sm">

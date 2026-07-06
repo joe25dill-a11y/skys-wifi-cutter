@@ -49,8 +49,12 @@ export class ArpSpoofer {
     }
   }
 
-  async getGatewayIp() {
-    if (this.gatewayIp) {
+  invalidateGatewayCache() {
+    this.gatewayIp = null;
+  }
+
+  async getGatewayIp(force = false) {
+    if (!force && this.gatewayIp) {
       return this.gatewayIp;
     }
 
@@ -179,7 +183,17 @@ export class ArpSpoofer {
       iface || ctx.iface,
       localIp || ctx.localIp
     );
-    if (restored) return;
+    if (restored) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await runNativeRestore(
+        ipAddress,
+        macAddress,
+        gateway,
+        iface || ctx.iface,
+        localIp || ctx.localIp
+      );
+      return;
+    }
 
     const python = await this.detectPython();
     if (!python) return;

@@ -17,7 +17,7 @@ internal static class ArpRestore
         device.Open(DeviceModes.Promiscuous, 1000);
         try
         {
-            for (var i = 0; i < 4; i++)
+            for (var i = 0; i < 6; i++)
             {
                 SendReply(
                     device,

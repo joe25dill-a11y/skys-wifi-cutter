@@ -95,15 +95,93 @@ internal static class NetworkHelper
 
     internal static PhysicalAddress GetOurMac(LibPcapLiveDevice device)
     {
+        var mac = TryResolveMacForDevice(device);
+        if (IsValidMac(mac))
+        {
+            return mac!;
+        }
+
         foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
         {
-            if (ni.Name == device.Name || ni.Description == device.Description)
+            if (ni.OperationalStatus != OperationalStatus.Up) continue;
+            var candidate = ni.GetPhysicalAddress();
+            if (IsValidMac(candidate))
             {
-                return ni.GetPhysicalAddress();
+                return candidate;
             }
         }
 
-        throw new InvalidOperationException($"Could not resolve MAC for adapter {device.Description}");
+        throw new InvalidOperationException(
+            $"Could not resolve MAC for adapter {device.Description ?? device.Name ?? "unknown"}");
+    }
+
+    private static bool IsValidMac(PhysicalAddress? mac)
+    {
+        if (mac == null || mac.Equals(PhysicalAddress.None)) return false;
+        var bytes = mac.GetAddressBytes();
+        if (bytes.Length != 6) return false;
+        return bytes.Any(b => b != 0);
+    }
+
+    private static PhysicalAddress? TryResolveMacForDevice(LibPcapLiveDevice device)
+    {
+        var devName = device.Name ?? "";
+        var devDesc = device.Description ?? "";
+
+        foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (ni.OperationalStatus == OperationalStatus.Down) continue;
+
+            if (string.Equals(ni.Name, devName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(ni.Description, devDesc, StringComparison.OrdinalIgnoreCase))
+            {
+                var mac = ni.GetPhysicalAddress();
+                if (IsValidMac(mac)) return mac;
+            }
+
+            var id = (ni.Id ?? "").Replace("{", "", StringComparison.Ordinal)
+                .Replace("}", "", StringComparison.Ordinal);
+            if (id.Length > 0 &&
+                (devName.Contains(id, StringComparison.OrdinalIgnoreCase) ||
+                 devDesc.Contains(id, StringComparison.OrdinalIgnoreCase)))
+            {
+                var mac = ni.GetPhysicalAddress();
+                if (IsValidMac(mac)) return mac;
+            }
+        }
+
+        try
+        {
+            var pcapIps = new HashSet<string>(StringComparer.Ordinal);
+            if (device.Addresses != null)
+            {
+                foreach (var addr in device.Addresses)
+                {
+                    var ip = addr.Addr?.ipAddress?.ToString();
+                    if (!string.IsNullOrEmpty(ip)) pcapIps.Add(ip);
+                }
+            }
+
+            if (pcapIps.Count == 0) return null;
+
+            foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus == OperationalStatus.Down) continue;
+                foreach (var ua in ni.GetIPProperties().UnicastAddresses)
+                {
+                    if (ua.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+                    if (!pcapIps.Contains(ua.Address.ToString())) continue;
+                    var mac = ni.GetPhysicalAddress();
+                    if (IsValidMac(mac)) return mac;
+                }
+            }
+        }
+        catch
+        {
+            // optional
+        }
+
+        return null;
     }
 
     internal static PhysicalAddress ResolveMac(string ip, PhysicalAddress fallback)

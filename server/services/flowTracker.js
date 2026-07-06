@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import logger from '../utils/logger.js';
+import { filterNoisyPcapLog } from '../utils/logNoise.js';
 import { getScriptsDir } from '../utils/paths.js';
 import { resolvePython } from '../utils/pythonRuntime.js';
 
@@ -106,7 +107,7 @@ export class FlowTracker {
     });
 
     child.stderr.on('data', (data) => {
-      const text = data.toString().trim();
+      const text = filterNoisyPcapLog(data.toString());
       if (text) {
         logger.warn(`[Flow] ${text}`);
         this.lastError = text;

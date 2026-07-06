@@ -1,6 +1,12 @@
 """Resolve Windows Npcap/Scapy interface names from NetConnectionID or local IP."""
 
+import logging
 import sys
+import warnings
+
+warnings.filterwarnings("ignore", message=".*WinPcap.*")
+warnings.filterwarnings("ignore", message=".*deprecated.*")
+logging.getLogger("scapy").setLevel(logging.ERROR)
 
 
 def resolve_iface(name: str, local_ip: str = "") -> str:

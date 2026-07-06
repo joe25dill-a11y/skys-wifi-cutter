@@ -1,12 +1,83 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import logger from '../utils/logger.js';
+import { arpSpoofer } from './arpSpoofer.js';
 
 const execAsync = promisify(exec);
 
 let driftTimer = null;
 let baselineGatewayMac = null;
 let driftAlerts = [];
+let localMacsCache = { macs: new Set(), at: 0 };
+
+function normalizeMac(mac) {
+  return String(mac || '')
+    .toUpperCase()
+    .replace(/-/g, ':');
+}
+
+async function getLocalMacs() {
+  if (Date.now() - localMacsCache.at < 60_000) {
+    return localMacsCache.macs;
+  }
+
+  const macs = new Set();
+  try {
+    if (process.platform === 'win32') {
+      const { stdout } = await execAsync(
+        'powershell -NoProfile -Command "Get-NetAdapter | Where-Object { $_.Status -eq \'Up\' -and $_.MacAddress } | ForEach-Object { $_.MacAddress }"',
+        { windowsHide: true }
+      );
+      for (const line of stdout.split(/\r?\n/)) {
+        const mac = normalizeMac(line.trim());
+        if (mac.length >= 11) macs.add(mac);
+      }
+    } else {
+      const { stdout } = await execAsync('ip link', { windowsHide: true });
+      for (const line of stdout.split('\n')) {
+        const match = line.match(/link\/\w+\s+([0-9a-f:]{11,17})/i);
+        if (match) macs.add(normalizeMac(match[1]));
+      }
+    }
+  } catch {
+    // optional
+  }
+
+  localMacsCache = { macs, at: Date.now() };
+  return macs;
+}
+
+function isLocalMac(mac, localMacs) {
+  return localMacs.has(normalizeMac(mac));
+}
+
+async function isAppManipulatingNetwork() {
+  if (arpSpoofer.getActiveCuts().length > 0) return true;
+
+  try {
+    const { deviceMeter } = await import('./deviceMeter.js');
+    if (deviceMeter.getMeteringMacs().length > 0) return true;
+  } catch {
+    // ignore
+  }
+
+  try {
+    const { lagController } = await import('./lagController.js');
+    if (lagController.getActiveLags().length > 0) return true;
+  } catch {
+    // ignore
+  }
+
+  try {
+    const { hotspotController } = await import('./hotspotController.js');
+    const hs = await hotspotController.getStatus();
+    if (hs.isTrafficBlocked || hs.constantLagActive || hs.gamingModeActive) return true;
+  } catch {
+    // ignore
+  }
+
+  return false;
+}
 
 export class NetworkDefense {
   constructor() {
@@ -33,7 +104,19 @@ export class NetworkDefense {
       throw new Error('Could not detect gateway');
     }
 
-    const { stdout } = await execAsync(`arp -a ${this.gatewayIp}`);
+    try {
+      const flag = process.platform === 'win32' ? '-n' : '-c';
+      const wait = process.platform === 'win32' ? '-w' : '-W';
+      const unit = process.platform === 'win32' ? '1000' : '1';
+      await execAsync(`ping ${flag} 1 ${wait} ${unit} ${this.gatewayIp}`, {
+        windowsHide: true,
+        timeout: 4000
+      });
+    } catch {
+      // gateway may block ICMP
+    }
+
+    const { stdout } = await execAsync(`arp -a ${this.gatewayIp}`, { windowsHide: true });
     const macMatch = stdout.match(/([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})/);
     if (!macMatch) {
       throw new Error('Could not resolve gateway MAC — ping your router first');
@@ -121,30 +204,59 @@ export function startGatewayDriftMonitor() {
   driftTimer = setInterval(() => {
     networkDefense
       .resolveGateway()
-      .then(() => {
+      .then(async () => {
         const current = networkDefense.gatewayMac;
         if (!current) return;
+
+        const localMacs = await getLocalMacs();
+
+        if (await isAppManipulatingNetwork()) {
+          driftAlerts = [];
+          return;
+        }
+
+        // When we meter/cut, Windows ARP cache may show OUR MAC for the router — not an attack.
+        if (isLocalMac(current, localMacs)) {
+          driftAlerts = [];
+          return;
+        }
+
         if (!baselineGatewayMac) {
           baselineGatewayMac = current;
           return;
         }
-        if (baselineGatewayMac !== current) {
-          driftAlerts = [
-            {
-              type: 'gateway_drift',
-              message: 'Gateway MAC changed — possible ARP attack on your PC',
-              previousMac: baselineGatewayMac,
-              currentMac: current
-            }
-          ];
-          logger.warn(`Gateway MAC drift detected: ${baselineGatewayMac} -> ${current}`);
-          baselineGatewayMac = current;
+
+        if (baselineGatewayMac === current) {
+          driftAlerts = [];
+          return;
         }
+
+        if (isLocalMac(baselineGatewayMac, localMacs)) {
+          baselineGatewayMac = current;
+          driftAlerts = [];
+          return;
+        }
+
+        driftAlerts = [
+          {
+            type: 'gateway_drift',
+            message: `Router MAC changed (${baselineGatewayMac} → ${current}) — check your gateway if you did not change networks`,
+            previousMac: baselineGatewayMac,
+            currentMac: current
+          }
+        ];
+        logger.warn(`Gateway MAC drift detected: ${baselineGatewayMac} -> ${current}`);
+        arpSpoofer.invalidateGatewayCache();
+        baselineGatewayMac = current;
       })
       .catch((err) => {
         logger.debug(`Gateway drift check failed: ${err.message}`);
       });
   }, 30_000);
+}
+
+export function clearGatewayDriftAlerts() {
+  driftAlerts = [];
 }
 
 export function getGatewayDriftAlerts() {

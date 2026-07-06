@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import logger from '../utils/logger.js';
+import { filterNoisyPcapLog } from '../utils/logNoise.js';
 import { getNativeEnginePath, runNativeRestore } from '../utils/nativeEngine.js';
 import { quoteExecutable, resolvePython } from '../utils/pythonRuntime.js';
 import { arpSpoofer } from './arpSpoofer.js';
@@ -92,6 +93,9 @@ export class PortBlocker {
       { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
     );
 
+    let startError = null;
+    let started = false;
+
     const entry = {
       process: child,
       ipAddress,
@@ -110,6 +114,8 @@ export class PortBlocker {
         if (!line.trim().startsWith('{')) continue;
         try {
           const msg = JSON.parse(line.trim());
+          if (msg.type === 'started') started = true;
+          if (msg.type === 'error') startError = msg.message || 'Port block failed';
           if (msg.type === 'portblock_stats' && typeof msg.dropped === 'number') {
             entry.dropped = msg.dropped;
           }
@@ -120,21 +126,68 @@ export class PortBlocker {
     });
 
     child.stderr.on('data', (data) => {
-      const text = data.toString().trim();
+      const text = filterNoisyPcapLog(data.toString());
       if (text) logger.warn(`[PortBlock:${mac}] ${text}`);
     });
 
-    child.on('exit', (code) => {
-      if (this.active.get(mac)?.process === child) {
-        this.active.delete(mac);
-        this.restoreArp(mac, ipAddress, gatewayIp, networkInfo.interface, networkInfo.ip).catch(
-          () => null
-        );
+    const startup = await new Promise((resolve, reject) => {
+      let settled = false;
+      const done = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        fn(value);
+      };
+
+      child.on('exit', (code) => {
+        if (this.active.get(mac)?.process === child) {
+          this.active.delete(mac);
+          this.restoreArp(mac, ipAddress, gatewayIp, networkInfo.interface, networkInfo.ip).catch(
+            () => null
+          );
+        }
+        if (!settled && code) {
+          done(
+            reject,
+            new Error(startError || `Port block failed to start (exit ${code})`)
+          );
+          return;
+        }
         if (code && code !== 0) {
           logger.warn(`[PortBlock] exited ${code} for ${mac}`);
         }
-      }
+      });
+
+      setTimeout(() => {
+        if (settled) return;
+        if (startError) {
+          try {
+            child.kill('SIGTERM');
+          } catch {
+            // ignore
+          }
+          done(reject, new Error(startError));
+          return;
+        }
+        if (child.exitCode != null && child.exitCode !== 0) {
+          done(reject, new Error(`Port block failed to start (exit ${child.exitCode})`));
+          return;
+        }
+        if (!started) {
+          try {
+            child.kill('SIGTERM');
+          } catch {
+            // ignore
+          }
+          done(reject, new Error('Port block did not confirm start — check admin rights and Npcap'));
+          return;
+        }
+        done(resolve, true);
+      }, 1200);
     });
+
+    if (!startup) {
+      throw new Error('Port block failed to start');
+    }
 
     this.active.set(mac, entry);
     logger.info(`Port block started for ${ipAddress} (${mac}): ${resolved.label}`);

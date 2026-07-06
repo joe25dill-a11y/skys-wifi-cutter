@@ -53,11 +53,17 @@ export function AlertsBanner() {
       <div className="flex gap-2 items-start justify-between">
         <div className="flex gap-2 text-rose-800 dark:text-rose-200">
           <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-          <ul className="space-y-0.5">
-            {items.slice(0, 5).map((msg) => (
-              <li key={msg}>{msg}</li>
-            ))}
-          </ul>
+          <div>
+            <p className="font-medium mb-1">Network alerts</p>
+            <p className="text-xs opacity-80 mb-2">
+              Real external threats are rare. Speed meter and cut can trigger false ARP warnings on older builds.
+            </p>
+            <ul className="space-y-0.5">
+              {items.slice(0, 5).map((msg) => (
+                <li key={msg}>{msg}</li>
+              ))}
+            </ul>
+          </div>
         </div>
         <button
           onClick={() => setDismissed(true)}

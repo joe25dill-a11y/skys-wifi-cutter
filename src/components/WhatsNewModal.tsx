@@ -4,6 +4,21 @@ import { Sparkles, X } from 'lucide-react';
 const VERSION_KEY = 'skys-last-seen-version';
 
 const HIGHLIGHTS: Record<string, string[]> = {
+  '4.10.2': [
+    'Honest health — status bar shows Python fallback and real issues instead of silent failures',
+    'Port block verifies native engine actually started before showing success',
+    'Quieter Npcap/WinPcap log noise; alerts banner explains false ARP warnings'
+  ],
+  '4.10.1': [
+    'Fixed false "ARP attack" alert when using Speed meter or cut — ignores your own PC MAC in router cache'
+  ],
+  '4.10.0': [
+    'Fixed native meter/port block on Ethernet — adapter MAC resolution for Npcap',
+    'Hotspot network shaping — lag delay + packet drop % sliders (clumsy-style)',
+    'Stronger ARP restore — double gratuitous ARP burst; gateway cache refreshes on drift',
+    'Quieter logs — WinPcap deprecation warnings suppressed in Python flow/meter',
+    'Diagnostics Cut Defender chip fixed; localhost rate limit no longer breaks JSON'
+  ],
   '4.9.0': [
     'Per-device History tab — cuts, lag, DNS, renames, online/offline; export CSV',
     'Unified diagnostics dashboard — green/yellow/red status chips + cut troubleshoot tips',

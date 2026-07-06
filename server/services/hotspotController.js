@@ -35,6 +35,7 @@ export class HotspotController {
     this.blockedPacketQueue = [];
     this.constantLagActive = false;
     this.constantLagMs = 150;
+    this.constantLagDropPercent = 0;
     this.constantLagTimer = null;
     this.constantLagTargets = new Map();
     this.bandwidthCap = null;
@@ -664,12 +665,13 @@ rsn_pairwise=CCMP
     }
   }
 
-  async startConstantLag(lagMs = 150, targetMacs = null) {
+  async startConstantLag(lagMs = 150, targetMacs = null, dropPercent = 0) {
     if (!this.isActive) {
       throw new Error('Hotspot not active');
     }
 
     this.constantLagMs = Math.max(50, Math.min(2000, Number(lagMs) || 150));
+    this.constantLagDropPercent = Math.max(0, Math.min(95, Number(dropPercent) || 0));
     this.constantLagActive = true;
 
     const clients = await this.resolveTargetClients(targetMacs ?? this.selectedTargetMacs);
@@ -678,15 +680,18 @@ rsn_pairwise=CCMP
     if (this.platform === 'win32' && ips.length > 0 && (await this.tryWinDivertAvailable())) {
       await this.stopConstantLag().catch(() => null);
       try {
-        await windivertHotspot.startLag(ips, this.constantLagMs);
+        await windivertHotspot.startLag(ips, this.constantLagMs, this.constantLagDropPercent);
         this.constantLagEngine = 'windivert';
         for (const client of clients) {
           this.constantLagTargets.set(client.mac, { ip: client.ip });
         }
+        const dropNote =
+          this.constantLagDropPercent > 0 ? `, ${this.constantLagDropPercent}% drop` : '';
         return {
           success: true,
-          message: `WinDivert constant lag — ${this.constantLagMs}ms on hotspot clients`,
+          message: `WinDivert constant lag — ${this.constantLagMs}ms${dropNote} on hotspot clients`,
           lagMs: this.constantLagMs,
+          dropPercent: this.constantLagDropPercent,
           engine: 'windivert'
         };
       } catch (error) {
@@ -738,6 +743,7 @@ rsn_pairwise=CCMP
       success: true,
       message: `Constant lag active — ${this.constantLagMs}ms on hotspot clients`,
       lagMs: this.constantLagMs,
+      dropPercent: this.constantLagDropPercent,
       engine: 'arp'
     };
   }
@@ -1106,6 +1112,7 @@ rsn_pairwise=CCMP
       windivert: windivertHotspot.getStatus(),
       constantLagActive: this.constantLagActive,
       constantLagMs: this.constantLagMs,
+      constantLagDropPercent: this.constantLagDropPercent,
       gamingModeActive: this.gamingModeActive,
       bandwidthCap: this.bandwidthCap,
       ssidPresets: SSID_PRESETS,

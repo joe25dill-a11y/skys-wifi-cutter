@@ -2,6 +2,7 @@ import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import logger from '../utils/logger.js';
+import { filterNoisyPcapLog } from '../utils/logNoise.js';
 import { getScriptsDir } from '../utils/paths.js';
 import { quoteExecutable, resolvePython } from '../utils/pythonRuntime.js';
 import { getNativeMeterPath } from '../utils/nativeRuntime.js';
@@ -32,6 +33,14 @@ export class DeviceMeter {
 
   getMeteringMacs() {
     return Array.from(this.active.keys());
+  }
+
+  getMeteringDetails() {
+    return Array.from(this.active.entries()).map(([mac, data]) => ({
+      mac,
+      ip: data.ipAddress,
+      engine: data.engine
+    }));
   }
 
   async enableForwarding(iface) {
@@ -193,7 +202,7 @@ export class DeviceMeter {
     });
 
     child.stderr.on('data', (data) => {
-      const text = data.toString().trim();
+      const text = filterNoisyPcapLog(data.toString());
       if (text) logger.warn(`[Meter:${meter.engine}] ${text}`);
     });
 
@@ -237,9 +246,13 @@ export class DeviceMeter {
         localIp
       );
       if (pythonMeter) {
-        return this.refreshDevice(macAddress, target.ip, iface, localIp, durationSec, {
+        const fallback = await this.refreshDevice(macAddress, target.ip, iface, localIp, durationSec, {
           preferPython: true
         });
+        return {
+          ...fallback,
+          message: `${fallback.message} (native engine failed — using Python fallback)`
+        };
       }
     }
 

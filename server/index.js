@@ -170,6 +170,28 @@ arpSpoofer.setOnCutExit(async (macAddress) => {
 
 let restoredCutsCount = 0;
 
+function buildOperationalNotes(checks) {
+  const notes = [];
+
+  const pythonMeters = deviceMeter.getMeteringDetails().filter((m) => m.engine === 'python');
+  if (pythonMeters.length > 0) {
+    notes.push(
+      `Bandwidth meter using Python fallback on ${pythonMeters.length} device(s) — native engine failed or was busy`
+    );
+  }
+
+  const flow = flowTracker.getStatus();
+  if (flow.lastError && !/winpcap|deprecated/i.test(flow.lastError)) {
+    notes.push(`Flow tracker: ${flow.lastError}`);
+  }
+
+  if (checks?.nativeMeter && pythonMeters.length === 0 && checks.scapy) {
+    notes.push('Native C# engine ready — Python only used if native meter fails');
+  }
+
+  return notes;
+}
+
 app.get('/api/health', async (req, res) => {
   let networkInfo = null;
   try {
@@ -179,13 +201,15 @@ app.get('/api/health', async (req, res) => {
   }
 
   const checks = await getSystemChecks();
-  const isHealthy = checks.cutReady && checks.warnings.length === 0;
+  const operationalNotes = buildOperationalNotes(checks);
+  const isHealthy = checks.cutReady && checks.warnings.length === 0 && operationalNotes.length === 0;
 
   res.json({
     status: isHealthy ? 'ok' : 'degraded',
     degradedReason: !checks.cutReady
       ? checks.flowBlockReason || 'Cut/limit features not ready'
-      : checks.warnings[0] || null,
+      : operationalNotes[0] || checks.warnings[0] || null,
+    operationalNotes,
     version: APP_VERSION,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
@@ -1323,9 +1347,10 @@ app.post('/api/hotspot/targets', async (req, res, next) => {
 app.post('/api/hotspot/constant-lag/start', async (req, res, next) => {
   try {
     const lagMs = validateLagValue(req.body.lagMs || 150, 'lagMs');
+    const dropPercent = Math.max(0, Math.min(95, Number(req.body.dropPercent) || 0));
     const targetMacs = parseTargetMacs(req.body);
-    const result = await hotspotController.startConstantLag(lagMs, targetMacs);
-    logAudit('hotspot_constant_lag_start', { detail: { lagMs, targets: targetMacs } });
+    const result = await hotspotController.startConstantLag(lagMs, targetMacs, dropPercent);
+    logAudit('hotspot_constant_lag_start', { detail: { lagMs, dropPercent, targets: targetMacs } });
     res.json(result);
   } catch (err) {
     next(err);
@@ -1546,7 +1571,7 @@ async function buildDiagnosticsPayload() {
     { id: 'internet', label: 'Internet', status: internetOk ? 'ok' : 'warn', detail: internetOk ? 'Reachable' : 'Offline or blocked' },
     { id: 'hotspot', label: 'Hotspot support', status: checks.hotspotReady ? 'ok' : 'warn', detail: checks.hotspotReady ? 'Ready' : 'May need admin/Python' },
     { id: 'api', label: 'Local API', status: 'ok', detail: `v${APP_VERSION}` },
-    { id: 'defense', label: 'Cut Defender', status: defense.enabled ? 'ok' : 'warn', detail: defense.enabled ? 'Gateway pinned' : 'Off' }
+    { id: 'defense', label: 'Cut Defender', status: defense.isActive ? 'ok' : 'warn', detail: defense.isActive ? 'Gateway pinned' : 'Off' }
   ];
 
   return {

@@ -116,11 +116,17 @@ export function StatusBar({ health, deviceCount, onlineCount = 0, onOpenTroubles
         </div>
       </div>
       {checks?.cutReady ? (
+        health?.operationalNotes && health.operationalNotes.length > 0 ? (
+          <p className="text-xs text-amber-300 mt-3">
+            {health.operationalNotes[0]}
+          </p>
+        ) : (
         <p className="text-xs text-emerald-300 mt-3 flex items-center gap-1">
           <Shield className="w-3.5 h-3.5" />
           <Wifi className="w-3.5 h-3.5" />
           Ready — scan, cut, limit speed, lag, port block, DNS lock, and one-way kill
         </p>
+        )
       ) : (
         <p className="text-xs text-amber-300 mt-3">
           {health?.degradedReason || checks?.flowBlockReason || 'Run as Administrator with Npcap installed'}

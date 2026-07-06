@@ -305,12 +305,13 @@ internal static class Program
     {
         if (args.Length < 3)
         {
-            Console.Error.WriteLine("Usage: SkysNativeMeter hotspot-lag <client_ips_csv> <delay_ms>");
+            Console.Error.WriteLine("Usage: SkysNativeMeter hotspot-lag <client_ips_csv> <delay_ms> [drop_percent]");
             return 1;
         }
 
         var delayMs = int.TryParse(args[2], out var ms) ? ms : 150;
-        using var lag = new HotspotDivertLag(ParseIpCsv(args[1]), delayMs);
+        var dropPercent = args.Length > 3 && int.TryParse(args[3], out var dp) ? dp : 0;
+        using var lag = new HotspotDivertLag(ParseIpCsv(args[1]), delayMs, dropPercent);
         Console.CancelKeyPress += (_, e) =>
         {
             e.Cancel = true;

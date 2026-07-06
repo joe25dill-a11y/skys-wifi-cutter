@@ -108,15 +108,20 @@ class WinDivertHotspot {
     this.blockProcess = null;
   }
 
-  async startLag(ips = [], delayMs = 150) {
+  async startLag(ips = [], delayMs = 150, dropPercent = 0) {
     await this.stopLag();
     const list = [...new Set(ips.filter(Boolean))];
     if (list.length === 0) {
       throw new Error('No client IPs for WinDivert lag');
     }
 
-    this.lagProcess = this.spawnArgs('hotspot-lag', [list.join(','), String(delayMs)]);
-    return { engine: 'windivert', delayMs, targets: list };
+    const drop = Math.max(0, Math.min(95, Number(dropPercent) || 0));
+    this.lagProcess = this.spawnArgs('hotspot-lag', [
+      list.join(','),
+      String(delayMs),
+      String(drop)
+    ]);
+    return { engine: 'windivert', delayMs, dropPercent: drop, targets: list };
   }
 
   async stopLag() {

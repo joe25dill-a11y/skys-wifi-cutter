@@ -73,6 +73,7 @@ export interface SystemChecks {
 export interface HealthResponse {
   status: string;
   degradedReason?: string | null;
+  operationalNotes?: string[];
   version?: string;
   timestamp: string;
   uptime: number;

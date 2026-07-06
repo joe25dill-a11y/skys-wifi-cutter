@@ -9,19 +9,22 @@ internal sealed class HotspotDivertLag : IDisposable
     private readonly HashSet<string> _targets;
     private readonly string _filter;
     private readonly int _delayMs;
+    private readonly int _dropPercent;
+    private readonly Random _rng = new();
     private IntPtr _handle = IntPtr.Zero;
     private volatile bool _running;
     private Thread? _recvThread;
     private Thread? _sendThread;
     private readonly ConcurrentQueue<DelayedPacket> _queue = new();
 
-    public HotspotDivertLag(IEnumerable<string> targetIps, int delayMs)
+    public HotspotDivertLag(IEnumerable<string> targetIps, int delayMs, int dropPercent = 0)
     {
         _targets = targetIps
             .Where(ip => !string.IsNullOrWhiteSpace(ip))
             .Select(ip => ip.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         _delayMs = Math.Clamp(delayMs, 20, 3000);
+        _dropPercent = Math.Clamp(dropPercent, 0, 95);
         _filter = WinDivertNative.BuildFilter(_targets);
     }
 
@@ -51,6 +54,7 @@ internal sealed class HotspotDivertLag : IDisposable
             mode = "hotspot-lag",
             engine = "windivert",
             delay_ms = _delayMs,
+            drop_percent = _dropPercent,
             targets = _targets.ToArray()
         });
 
@@ -91,6 +95,11 @@ internal sealed class HotspotDivertLag : IDisposable
 
                 if (WinDivertNative.PacketTouchesIp(packet.AsSpan(0, (int)readLen), _targets))
                 {
+                    if (_dropPercent > 0 && _rng.Next(100) < _dropPercent)
+                    {
+                        continue;
+                    }
+
                     var copy = new byte[readLen];
                     Buffer.BlockCopy(packet, 0, copy, 0, (int)readLen);
                     var addrCopy = new byte[addr.Length];
