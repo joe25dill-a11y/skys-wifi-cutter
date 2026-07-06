@@ -156,24 +156,36 @@ export function RemoteControlPanel() {
       <div className="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 space-y-2">
         <p className="text-xs font-medium text-slate-600 dark:text-slate-300">Phone URL (same WiFi/LAN)</p>
         {pcIp ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <code className="text-sm text-indigo-600 dark:text-indigo-400 font-mono break-all">{remotePageUrl}</code>
-            <button
-              onClick={copyRemoteLink}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs hover:bg-white dark:hover:bg-slate-800"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              Copy link
-            </button>
-            <a
-              href={remotePageUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs hover:bg-white dark:hover:bg-slate-800"
-            >
-              Open
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+          <div className="flex flex-wrap items-start gap-4">
+            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+              <code className="text-sm text-indigo-600 dark:text-indigo-400 font-mono break-all">{remotePageUrl}</code>
+              <button
+                onClick={copyRemoteLink}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs hover:bg-white dark:hover:bg-slate-800"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                Copy link
+              </button>
+              <a
+                href={remotePageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs hover:bg-white dark:hover:bg-slate-800"
+              >
+                Open
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+            <div className="shrink-0 text-center">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(remotePageUrl)}`}
+                alt="QR code for remote URL"
+                width={120}
+                height={120}
+                className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white p-1"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">Scan on phone</p>
+            </div>
           </div>
         ) : (
           <p className="text-xs text-slate-500">Detecting PC LAN IP from health check…</p>

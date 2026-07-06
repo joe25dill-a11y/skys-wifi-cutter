@@ -84,6 +84,7 @@ export interface HealthResponse {
     mac: string;
   } | null;
   activeCuts: number;
+  restoredCutsCount?: number;
   defense?: { isActive: boolean; gatewayIp: string | null; gatewayMac: string | null };
   activeSpeedLimits?: number;
   speedLimits?: { mac: string; uploadKbps: number; downloadKbps: number }[];

@@ -81,6 +81,7 @@ export function HotspotHub() {
   const [pulseCount, setPulseCount] = useState(8);
   const [freezeDuration, setFreezeDuration] = useState(120);
   const [gamingLoading, setGamingLoading] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -646,6 +647,16 @@ export function HotspotHub() {
             ))}
           </div>
 
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="w-full py-2.5 rounded-xl border border-indigo-500/40 text-sm font-medium text-indigo-200 hover:bg-indigo-800/30"
+          >
+            {showAdvanced ? '▾ Hide advanced' : '▸ Advanced — pulse, cap, gaming mode'}
+          </button>
+
+          {showAdvanced && (
+          <>
           <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-purple-900/20 border border-purple-500/30">
             <div>
               <label className="text-xs text-purple-200">Pulses</label>
@@ -765,6 +776,8 @@ export function HotspotHub() {
               </button>
             )}
           </div>
+          </>
+          )}
 
           <div className="flex items-center gap-2 justify-center text-xs text-indigo-300 bg-indigo-900/30 rounded-lg py-2">
             <Keyboard className="w-4 h-4" />

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { apiFetch } from '../config/api';
 
+import { actionLabel } from '../utils/auditLabels';
+
 interface AuditEntry {
   id: number;
   action: string;
@@ -31,45 +33,6 @@ const ACTION_COLORS: Record<string, string> = {
   group_cut_all: 'bg-red-500',
   group_restore_all: 'bg-emerald-500'
 };
-
-const ACTION_LABELS: Record<string, string> = {
-  cut: 'Device cut',
-  uncut: 'Device restored',
-  hotspot_freeze: 'Hotspot frozen',
-  hotspot_pulse: 'Hotspot pulse',
-  hotspot_constant_lag_start: 'Hotspot constant lag started',
-  hotspot_constant_lag_stop: 'Hotspot constant lag stopped',
-  hotspot_gaming_mode_start: 'Hotspot gaming mode on',
-  hotspot_gaming_mode_stop: 'Hotspot gaming mode off',
-  hotspot_bandwidth_cap: 'Hotspot bandwidth cap',
-  hotspot_bandwidth_cap_clear: 'Hotspot cap cleared',
-  rule_cut: 'Automation rule cut',
-  rule_uncut: 'Automation rule restore',
-  rule_lag: 'Automation rule lag',
-  schedule_cut: 'Scheduled cut',
-  schedule_restore: 'Scheduled restore',
-  schedule_lag: 'Scheduled lag',
-  schedule_limit: 'Scheduled speed limit',
-  schedule_dns_block: 'Scheduled DNS block',
-  schedule_port_block: 'Scheduled port block',
-  schedule_firewall_kill: 'Scheduled firewall kill',
-  schedule_group_cut: 'Scheduled group cut',
-  schedule_group_restore: 'Scheduled group restore',
-  group_cut_all: 'Group cut all',
-  group_restore_all: 'Group restore all',
-  panic_stop_all: 'Panic stop all',
-  device_scan: 'Network scan',
-  quick_scan: 'Quick scan',
-  game_preset: 'Game preset applied',
-  wake_on_lan: 'Wake-on-LAN sent',
-  firewall_kill_start: 'Firewall kill started',
-  firewall_kill_stop: 'Firewall kill stopped',
-  settings_import: 'Settings imported'
-};
-
-function actionLabel(action: string) {
-  return ACTION_LABELS[action] ?? action.replace(/_/g, ' ');
-}
 
 export function AuditTimeline() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);

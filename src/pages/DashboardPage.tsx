@@ -27,7 +27,8 @@ import type { AppSettings } from '../components/SettingsPanel';
 import { NetworkPanel } from '../components/NetworkPanel';
 import { ToolsPanel } from '../components/ToolsPanel';
 import { StatusBar } from '../components/StatusBar';
-import { SetupWizard, isSetupComplete } from '../components/SetupWizard';
+import { SetupWizard, isSetupComplete, clearSetupComplete } from '../components/SetupWizard';
+import { RestoredCutsBanner } from '../components/RestoredCutsBanner';
 import { NetCutDevicePanel } from '../components/NetCutDevicePanel';
 import { WiFiAnalyzer } from '../components/WiFiAnalyzer';
 import { SpeedTest } from '../components/SpeedTest';
@@ -126,6 +127,7 @@ export const DashboardPage: React.FC = () => {
   const [compactList, setCompactList] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [pendingNewDevices, setPendingNewDevices] = useState<Device[]>([]);
+  const [deviceGroupNames, setDeviceGroupNames] = useState<Map<string, string>>(new Map());
   const [toolsPresetMac, setToolsPresetMac] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<
     'cutAll' | 'restoreAll' | 'bulkCut' | 'bulkRestore' | null
@@ -133,6 +135,7 @@ export const DashboardPage: React.FC = () => {
   const [meterEndsAt, setMeterEndsAt] = useState<Record<string, number>>({});
   const [, setMeterTick] = useState(0);
   const lastBulkCutMacsRef = useRef<string[]>([]);
+  const [restoredCutsDismissed, setRestoredCutsDismissed] = useState(false);
 
   const fetchDevices = async () => {
     const data = await apiFetch<Device[]>('/devices');
@@ -324,16 +327,30 @@ export const DashboardPage: React.FC = () => {
     toast.success(result.message || `Lag spike ${durationMs}ms`);
   };
 
-  const handleGhostPulse = async (mac: string) => {
+  const handleGhostPulse = async (
+    mac: string,
+    params?: { incomingMs: number; freezeMs: number; count: number }
+  ) => {
     const result = await apiFetch<{ message?: string; engine?: string }>(
       `/devices/${encodeMac(mac)}/ghost-pulse`,
       {
         method: 'POST',
-        body: JSON.stringify({ incomingMs: 1200, freezeMs: 250, count: 8 })
+        body: JSON.stringify({
+          incomingMs: params?.incomingMs ?? 1200,
+          freezeMs: params?.freezeMs ?? 250,
+          count: params?.count ?? 8
+        })
       }
     );
     toast.success(result.message || `Ghost pulse sent (${result.engine || 'native'})`);
     await fetchHealth();
+  };
+
+  const openTroubleshoot = () => {
+    setTab('tools');
+    setTimeout(() => {
+      document.getElementById('tools-troubleshoot')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   const exportCsv = () => {
@@ -526,6 +543,20 @@ export const DashboardPage: React.FC = () => {
     };
   }, [tab, powerSaver, livePollMs]);
 
+  useEffect(() => {
+    apiFetch<{ groups: { name: string; macs: string[] }[] }>('/groups')
+      .then((data) => {
+        const map = new Map<string, string>();
+        for (const group of data.groups || []) {
+          for (const mac of group.macs || []) {
+            map.set(mac.toUpperCase(), group.name);
+          }
+        }
+        setDeviceGroupNames(map);
+      })
+      .catch(() => null);
+  }, [devices.length]);
+
   const blockedCount = devices.filter((d) => d.status === 'blocked').length;
   const onlineCount = devices.filter((d) => d.is_online !== false).length;
   const warnings = health?.checks.warnings ?? [];
@@ -542,6 +573,9 @@ export const DashboardPage: React.FC = () => {
     (health?.dnsBlocks ?? []).map((b) => [b.mac.toUpperCase(), b])
   );
   const portBlockMacs = new Set((health?.portBlocks ?? []).map((b) => b.mac.toUpperCase()));
+  const portBlockLabels = new Map(
+    (health?.portBlocks ?? []).map((b) => [b.mac.toUpperCase(), b.label || b.preset || 'PORT'])
+  );
   const oneWayMacs = new Set((health?.oneWayKills ?? []).map((k) => k.mac.toUpperCase()));
   const firewallMacs = new Set((health?.firewallKills ?? []).map((k) => k.mac.toUpperCase()));
   const cutReady = health?.checks?.cutReady ?? false;
@@ -872,6 +906,7 @@ export const DashboardPage: React.FC = () => {
           isDnsBlocked={dnsMacs.has(selectedDevice.mac_address.toUpperCase()) || selectedDevice.dns_blocked}
           dnsBlockLabel={dnsBlockByMac.get(selectedDevice.mac_address.toUpperCase())?.label}
           isPortBlocked={portBlockMacs.has(selectedDevice.mac_address.toUpperCase())}
+          portBlockLabel={portBlockLabels.get(selectedDevice.mac_address.toUpperCase())}
           isOneWayKill={oneWayMacs.has(selectedDevice.mac_address.toUpperCase())}
           onPortBlock={() => {
             setPanelPortDevice(selectedDevice);
@@ -925,6 +960,9 @@ export const DashboardPage: React.FC = () => {
       {panelLagDevice && (
         <LagControl
           device={panelLagDevice}
+          activeLag={health?.lagSwitches?.find(
+            (l) => l.mac.toUpperCase() === panelLagDevice.mac_address.toUpperCase()
+          )}
           onClose={() => setPanelLagDevice(null)}
           onApply={handleLagControl}
           onRemove={handleRemoveLag}
@@ -1034,6 +1072,13 @@ export const DashboardPage: React.FC = () => {
         )}
 
         <UpdateBanner currentVersion={health?.version} />
+        {!restoredCutsDismissed && (health?.restoredCutsCount ?? 0) > 0 && (
+          <RestoredCutsBanner
+            count={health!.restoredCutsCount!}
+            onRestoreAll={handleRestoreAll}
+            onDismiss={() => setRestoredCutsDismissed(true)}
+          />
+        )}
         <AlertsBanner />
         <NewDeviceBanner
           devices={pendingNewDevices}
@@ -1048,7 +1093,12 @@ export const DashboardPage: React.FC = () => {
           onDismissAll={() => setPendingNewDevices([])}
         />
         <WhatsNewModal version={health?.version} />
-        <StatusBar health={health} deviceCount={devices.length} onlineCount={onlineCount} />
+        <StatusBar
+          health={health}
+          deviceCount={devices.length}
+          onlineCount={onlineCount}
+          onOpenTroubleshoot={openTroubleshoot}
+        />
 
         <NetworkPanel />
 
@@ -1170,7 +1220,7 @@ export const DashboardPage: React.FC = () => {
                     <input
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search..."
+                      placeholder="Search name, IP, MAC, notes, group…"
                       className="pl-8 pr-3 py-1.5 text-sm border rounded-lg dark:bg-slate-700 dark:border-slate-600"
                     />
                   </div>
@@ -1259,6 +1309,11 @@ export const DashboardPage: React.FC = () => {
                     gatewayIp={health?.network?.ip}
                     deviceBandwidth={bandwidth?.devices}
                     localMac={localMac}
+                    lagMacs={lagMacs}
+                    dnsMacs={dnsMacs}
+                    portBlockMacs={portBlockMacs}
+                    oneWayMacs={oneWayMacs}
+                    firewallMacs={firewallMacs}
                     onSelectDevice={setSelectedDevice}
                   />
                 </div>
@@ -1279,7 +1334,10 @@ export const DashboardPage: React.FC = () => {
                   lagMacs={lagMacs}
                   dnsMacs={dnsMacs}
                   portBlockMacs={portBlockMacs}
+                  portBlockLabels={portBlockLabels}
                   oneWayMacs={oneWayMacs}
+                  firewallMacs={firewallMacs}
+                  deviceGroupNames={deviceGroupNames}
                   cutReady={cutReady}
                   viewMode={viewMode}
                   compact={compactList}
@@ -1326,6 +1384,14 @@ export const DashboardPage: React.FC = () => {
             selectedDeviceMac={toolsPresetMac ?? selectedDevice?.mac_address ?? null}
             onSelectedDeviceMacChange={setToolsPresetMac}
             onHealthRefresh={fetchHealth}
+            onSettingsChange={(settings) => {
+              setAppSettings(settings);
+              setCompactList(Boolean(settings.compactDeviceList));
+            }}
+            onShowSetupAgain={() => {
+              clearSetupComplete();
+              setShowSetup(true);
+            }}
           />
         )}
       </main>

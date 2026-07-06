@@ -1,0 +1,5 @@
+Skys WiFi Cutter v4.9.0 — SHA256 checksums
+Generated at release time via scripts/github-release.ps1
+
+Skys.WiFi.Cutter.Setup.exe
+PLACEHOLDER — replace with actual SHA256 after building the installer

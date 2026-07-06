@@ -47,7 +47,10 @@ interface DeviceTableProps {
   lagMacs?: Set<string>;
   dnsMacs?: Set<string>;
   portBlockMacs?: Set<string>;
+  portBlockLabels?: Map<string, string>;
   oneWayMacs?: Set<string>;
+  firewallMacs?: Set<string>;
+  deviceGroupNames?: Map<string, string>;
   cutReady?: boolean;
   viewMode?: 'grid' | 'list';
   compact?: boolean;
@@ -171,7 +174,10 @@ export const DeviceTable: React.FC<DeviceTableProps> = ({
   lagMacs = new Set(),
   dnsMacs = new Set(),
   portBlockMacs = new Set(),
+  portBlockLabels = new Map(),
   oneWayMacs = new Set(),
+  firewallMacs = new Set(),
+  deviceGroupNames = new Map(),
   cutReady = true,
   viewMode = 'grid',
   compact = false,
@@ -191,14 +197,25 @@ export const DeviceTable: React.FC<DeviceTableProps> = ({
   );
 
   const filteredDevices = devices.filter((device) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      device.name.toLowerCase().includes(query) ||
-      device.ip_address.toLowerCase().includes(query) ||
-      device.mac_address.toLowerCase().includes(query) ||
-      (device.manufacturer || '').toLowerCase().includes(query) ||
-      (device.hostname || '').toLowerCase().includes(query)
-    );
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return true;
+    const groupName = deviceGroupNames.get(device.mac_address.toUpperCase()) || '';
+    const haystack = [
+      device.name,
+      device.ip_address,
+      device.mac_address,
+      device.manufacturer,
+      device.hostname,
+      device.notes,
+      groupName,
+      device.is_favorite ? 'favorite starred' : '',
+      device.status === 'blocked' ? 'cut blocked' : 'allowed online',
+      device.is_online === false ? 'offline' : 'online'
+    ]
+      .join(' ')
+      .toLowerCase();
+    const terms = query.split(/\s+/).filter(Boolean);
+    return terms.every((term) => haystack.includes(term));
   });
 
   const handleCutToggle = async (device: Device) => {
@@ -237,6 +254,8 @@ export const DeviceTable: React.FC<DeviceTableProps> = ({
                 const isDns = dnsMacs.has(device.mac_address.toUpperCase()) || device.dns_blocked;
                 const isPort = portBlockMacs.has(device.mac_address.toUpperCase());
                 const isOneWay = oneWayMacs.has(device.mac_address.toUpperCase());
+                const isFirewall = firewallMacs.has(device.mac_address.toUpperCase());
+                const portLabel = portBlockLabels.get(device.mac_address.toUpperCase());
                 return (
                   <tr
                     key={device.mac_address}
@@ -292,10 +311,15 @@ export const DeviceTable: React.FC<DeviceTableProps> = ({
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-600 text-white">DNS</span>
                         )}
                         {isPort && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-600 text-white">PORT</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-600 text-white" title={portLabel}>
+                            {portLabel ? portLabel.slice(0, 8) : 'PORT'}
+                          </span>
                         )}
                         {isOneWay && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-600 text-white">1WAY</span>
+                        )}
+                        {isFirewall && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-700 text-white">FW</span>
                         )}
                       </div>
                     </td>
@@ -332,6 +356,8 @@ export const DeviceTable: React.FC<DeviceTableProps> = ({
           const isDns = dnsMacs.has(device.mac_address.toUpperCase()) || device.dns_blocked;
           const isPort = portBlockMacs.has(device.mac_address.toUpperCase());
           const isOneWay = oneWayMacs.has(device.mac_address.toUpperCase());
+          const isFirewall = firewallMacs.has(device.mac_address.toUpperCase());
+          const portLabel = portBlockLabels.get(device.mac_address.toUpperCase());
           const bw = bandwidthByMac.get(device.mac_address.toUpperCase());
           const maxBw = Math.max(bw?.upload ?? 0, bw?.download ?? 0, 0.01);
 
@@ -422,13 +448,18 @@ export const DeviceTable: React.FC<DeviceTableProps> = ({
                       </span>
                     )}
                     {isPort && !isBlocked && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-violet-600 text-white font-bold">
-                        PORT
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-violet-600 text-white font-bold" title={portLabel}>
+                        {portLabel || 'PORT'}
                       </span>
                     )}
                     {isOneWay && !isBlocked && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-orange-600 text-white font-bold">
                         1WAY
+                      </span>
+                    )}
+                    {isFirewall && !isBlocked && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-rose-700 text-white font-bold">
+                        FIREWALL
                       </span>
                     )}
                     {device.open_ports && device.open_ports.length > 0 && (

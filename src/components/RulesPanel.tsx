@@ -63,6 +63,19 @@ export function RulesPanel({ devices }: { devices: Device[] }) {
     }
   };
 
+  const toggleEnabled = async (rule: Rule) => {
+    try {
+      await apiFetch(`/rules/${rule.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled: !rule.enabled })
+      });
+      await load();
+      toast.success(rule.enabled ? 'Rule disabled' : 'Rule enabled');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Toggle failed');
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
       <div className="flex items-center gap-2 mb-3">
@@ -139,7 +152,9 @@ export function RulesPanel({ devices }: { devices: Device[] }) {
           rules.map((r) => (
             <div
               key={r.id}
-              className="flex items-center justify-between gap-2 py-1.5 border-b border-slate-100 dark:border-slate-700"
+              className={`flex items-center justify-between gap-2 py-1.5 border-b border-slate-100 dark:border-slate-700 ${
+                r.enabled ? '' : 'opacity-50'
+              }`}
             >
               <span className="font-mono truncate">
                 {r.condition === 'above_mbps' ? '>' : '<'} {r.thresholdMbps} Mbps → {r.action}
@@ -148,6 +163,16 @@ export function RulesPanel({ devices }: { devices: Device[] }) {
               <span className="text-slate-400 truncate">
                 {devices.find((d) => d.mac_address === r.mac)?.name ?? r.mac}
               </span>
+              <button
+                onClick={() => toggleEnabled(r)}
+                className={`px-2 py-0.5 rounded text-[10px] font-medium shrink-0 ${
+                  r.enabled
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40'
+                    : 'bg-slate-200 text-slate-600 dark:bg-slate-700'
+                }`}
+              >
+                {r.enabled ? 'On' : 'Off'}
+              </button>
               <button onClick={() => removeRule(r.id)} className="text-red-500 shrink-0">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>

@@ -349,9 +349,45 @@ app.whenReady().then(async () => {
   }
 });
 
-app.on('before-quit', (event) => {
+app.on('before-quit', async (event) => {
   if (isQuitting) return;
   event.preventDefault();
+
+  try {
+    const res = await fetch(`http://127.0.0.1:${PORT}/api/hotspot/status`);
+    if (res.ok) {
+      const hotspot = await res.json();
+      if (hotspot.isActive) {
+        const settings = readAppSettings();
+        const stopOnQuit = settings.stopHotspotOnQuit !== false;
+        const choice = dialog.showMessageBoxSync({
+          type: 'warning',
+          title: 'Hotspot still active',
+          message: 'Windows Mobile Hotspot is still running.',
+          detail: stopOnQuit
+            ? 'Quitting will stop the hotspot and disconnect clients. Continue?'
+            : 'Hotspot may stay on after quit (see Tools → Settings). Quit anyway?',
+          buttons: stopOnQuit ? ['Quit & stop hotspot', 'Cancel'] : ['Quit anyway', 'Cancel'],
+          defaultId: 1,
+          cancelId: 1
+        });
+        if (choice === 1) {
+          return;
+        }
+        if (tray) {
+          tray.displayBalloon({
+            title: 'Skys WiFi Cutter',
+            content: stopOnQuit
+              ? 'Quitting — hotspot will be stopped.'
+              : 'Quitting — hotspot may remain active until you stop it in Windows Settings.'
+          });
+        }
+      }
+    }
+  } catch {
+    // server may already be down
+  }
+
   gracefulShutdown().finally(() => {
     app.exit(0);
   });

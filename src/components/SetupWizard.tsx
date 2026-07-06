@@ -26,6 +26,10 @@ export function markSetupComplete() {
   localStorage.setItem(SETUP_KEY, 'true');
 }
 
+export function clearSetupComplete() {
+  localStorage.removeItem(SETUP_KEY);
+}
+
 export function SetupWizard({ health, onComplete, onScan, onTestCut }: SetupWizardProps) {
   const [step, setStep] = useState(0);
   const [scanning, setScanning] = useState(false);
@@ -56,7 +60,7 @@ export function SetupWizard({ health, onComplete, onScan, onTestCut }: SetupWiza
     {
       title: 'Test cut (optional)',
       body: 'Pick any device after scanning and tap Cut in the device panel to confirm MITM works. Restore immediately after.',
-      ok: false,
+      ok: Boolean(checks?.cutReady),
       isTestCut: true
     },
     {
@@ -146,6 +150,24 @@ export function SetupWizard({ health, onComplete, onScan, onTestCut }: SetupWiza
 
           {'isTestCut' in current && current.isTestCut && (
             <div className="mb-6 space-y-2">
+              <div
+                className={`flex items-center gap-2 p-3 rounded-xl ${
+                  checks?.cutReady
+                    ? 'bg-emerald-500/15 border border-emerald-500/30'
+                    : 'bg-amber-500/15 border border-amber-500/30'
+                }`}
+              >
+                {checks?.cutReady ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                ) : (
+                  <XCircle className="w-5 h-5 text-amber-400" />
+                )}
+                <span className="text-sm">
+                  {checks?.cutReady
+                    ? 'Cut engine ready — you can test cut on a device now.'
+                    : 'Cut not ready yet — run as Administrator with Npcap installed.'}
+                </span>
+              </div>
               <p className="text-xs text-slate-400">
                 Scan your network first, then cut and restore one device to confirm everything works.
               </p>

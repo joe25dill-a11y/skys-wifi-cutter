@@ -34,6 +34,7 @@ interface Schedule {
   downloadKbps?: number;
   lagMs?: number;
   preset?: string;
+  lastRunAt?: string;
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -74,7 +75,7 @@ function isGroupAction(action: ScheduleAction) {
 }
 
 function getNextRunHint(days: number[], time: string, enabled: boolean): string {
-  if (!enabled) return 'Paused — will not run';
+  if (!enabled) return `Paused — runs at ${time} on selected days`;
   if (!days.length) return 'No days selected';
   const [h, m] = time.split(':').map(Number);
   const now = new Date();
@@ -94,6 +95,29 @@ function getNextRunHint(days: number[], time: string, enabled: boolean): string 
     }
   }
   return 'No upcoming run in the next 2 weeks';
+}
+
+function getMissedHint(days: number[], time: string, enabled: boolean): string | null {
+  if (!enabled || !days.length) return null;
+  const [h, m] = time.split(':').map(Number);
+  const now = new Date();
+  if (!days.includes(now.getDay())) return null;
+  const runTime = new Date(now);
+  runTime.setHours(h, m, 0, 0);
+  if (runTime < now) {
+    return `Today's ${time} slot passed — runs at ${time} on selected days`;
+  }
+  return null;
+}
+
+function formatLastRun(lastRunAt?: string) {
+  if (!lastRunAt) return null;
+  return `Last run: ${new Date(lastRunAt).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  })}`;
 }
 
 function scheduleToForm(s: Schedule) {
@@ -426,6 +450,14 @@ export function SchedulePanel({ devices }: { devices: Device[] }) {
                   <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-0.5">
                     {getNextRunHint(s.days ?? [], s.time, s.enabled)}
                   </p>
+                  {formatLastRun(s.lastRunAt) && (
+                    <p className="text-[11px] text-slate-500 mt-0.5">{formatLastRun(s.lastRunAt)}</p>
+                  )}
+                  {getMissedHint(s.days ?? [], s.time, s.enabled) && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                      {getMissedHint(s.days ?? [], s.time, s.enabled)}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   <button

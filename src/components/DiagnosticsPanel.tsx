@@ -4,6 +4,13 @@ import toast from 'react-hot-toast';
 import { apiFetch, API_BASE_URL } from '../config/api';
 import { ConfirmModal } from './ConfirmModal';
 
+interface DashboardItem {
+  id: string;
+  label: string;
+  status: 'ok' | 'warn' | 'error';
+  detail?: string;
+}
+
 interface DiagnosticsData {
   checks?: {
     cutReady?: boolean;
@@ -11,6 +18,13 @@ interface DiagnosticsData {
     npcap?: boolean;
     nativeMeter?: boolean;
     warnings?: string[];
+  };
+  dashboard?: DashboardItem[];
+  troubleshoot?: {
+    gatewayReachable?: boolean;
+    sameSubnet?: boolean;
+    gatewayIp?: string;
+    suggestions?: string[];
   };
   hotspot?: {
     isActive?: boolean;
@@ -143,6 +157,14 @@ export function DiagnosticsPanel() {
       {!data ? (
         <p className="text-sm text-slate-500">Loading diagnostics…</p>
       ) : (
+        <>
+          {(data.dashboard?.length ?? 0) > 0 && (
+            <div className="mb-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {data.dashboard!.map((item) => (
+                <DashboardChip key={item.id} item={item} />
+              ))}
+            </div>
+          )}
         <div className="grid md:grid-cols-2 gap-4 text-sm">
           <div className="space-y-2">
             <h4 className="text-xs font-bold uppercase text-slate-500">System</h4>
@@ -184,6 +206,15 @@ export function DiagnosticsPanel() {
             )}
           </div>
         </div>
+        {(data.troubleshoot?.suggestions?.length ?? 0) > 0 && (
+          <div className="mt-4 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 p-3 text-xs text-slate-600 dark:text-slate-300 space-y-1">
+            <p className="font-semibold text-slate-700 dark:text-slate-200">Cut troubleshooting tips</p>
+            {data.troubleshoot!.suggestions!.map((s) => (
+              <p key={s}>• {s}</p>
+            ))}
+          </div>
+        )}
+        </>
       )}
       <ConfirmModal
         open={showPanicConfirm}
@@ -222,5 +253,29 @@ function DiagRow({ ok, label }: { ok?: boolean | null; label: string }) {
       />
       {label}
     </p>
+  );
+}
+
+function DashboardChip({ item }: { item: DashboardItem }) {
+  const colors =
+    item.status === 'ok'
+      ? 'border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30'
+      : item.status === 'warn'
+        ? 'border-amber-500/40 bg-amber-50 dark:bg-amber-950/30'
+        : 'border-red-500/40 bg-red-50 dark:bg-red-950/30';
+  const dot =
+    item.status === 'ok' ? 'bg-emerald-500' : item.status === 'warn' ? 'bg-amber-500' : 'bg-red-500';
+  return (
+    <div className={`rounded-lg border px-2.5 py-2 ${colors}`}>
+      <div className="flex items-center gap-1.5">
+        <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
+        <span className="text-xs font-medium text-slate-800 dark:text-slate-100 truncate">{item.label}</span>
+      </div>
+      {item.detail && (
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate" title={item.detail}>
+          {item.detail}
+        </p>
+      )}
+    </div>
   );
 }

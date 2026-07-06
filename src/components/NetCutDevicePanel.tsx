@@ -23,6 +23,7 @@ import {
 import toast from 'react-hot-toast';
 import { Device, DeviceBandwidth } from '../types/device';
 import { ConfirmModal } from './ConfirmModal';
+import { DeviceHistoryPanel } from './DeviceHistoryPanel';
 
 type PendingConfirm = 'kick' | 'oneWayStart' | 'oneWayStop' | 'firewallStart' | 'firewallStop' | null;
 
@@ -51,6 +52,7 @@ interface NetCutDevicePanelProps {
   dnsBlockLabel?: string;
   onPortBlock?: () => void;
   isPortBlocked?: boolean;
+  portBlockLabel?: string;
   onOneWayKill?: () => Promise<void>;
   isOneWayKill?: boolean;
   onFirewallKill?: () => Promise<void>;
@@ -134,6 +136,7 @@ export function NetCutDevicePanel({
   dnsBlockLabel,
   onPortBlock,
   isPortBlocked,
+  portBlockLabel,
   onOneWayKill,
   isOneWayKill,
   onFirewallKill,
@@ -362,6 +365,19 @@ export function NetCutDevicePanel({
         )}
 
         <div className="px-4 py-3 text-xs space-y-1">
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {isOneWayKill && (
+              <span className="px-2 py-0.5 rounded-full bg-orange-600 text-white text-[10px] font-bold">1WAY</span>
+            )}
+            {isFirewallKill && (
+              <span className="px-2 py-0.5 rounded-full bg-rose-700 text-white text-[10px] font-bold">FIREWALL</span>
+            )}
+            {isPortBlocked && (
+              <span className="px-2 py-0.5 rounded-full bg-violet-600 text-white text-[10px] font-bold">
+                {portBlockLabel || 'PORT BLOCK'}
+              </span>
+            )}
+          </div>
           <p className="text-slate-500">
             Controllable: <span className="text-blue-400 capitalize">{mode}</span>
           </p>
@@ -554,6 +570,9 @@ export function NetCutDevicePanel({
             </button>
           </div>
         )}
+        <div className="px-4 pb-4">
+          <DeviceHistoryPanel mac={device.mac_address} />
+        </div>
       </div>
 
       {confirmProps && (

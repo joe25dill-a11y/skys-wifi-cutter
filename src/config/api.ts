@@ -44,7 +44,15 @@ async function parseJson<T>(response: Response): Promise<T> {
   if (!text) {
     return {} as T;
   }
-  return JSON.parse(text) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new ApiError(
+      text.length > 200 ? `${text.slice(0, 200)}…` : text,
+      response.status,
+      { raw: text }
+    );
+  }
 }
 
 export async function apiFetch<T>(

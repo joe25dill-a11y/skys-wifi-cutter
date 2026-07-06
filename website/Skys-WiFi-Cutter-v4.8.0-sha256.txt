@@ -1,0 +1,5 @@
+Skys WiFi Cutter v4.8.0 SHA256 checksum
+Replace this placeholder after building the installer:
+  certutil -hashfile Skys.WiFi.Cutter.Setup.exe SHA256
+
+SHA256=

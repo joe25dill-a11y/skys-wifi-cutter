@@ -34,6 +34,9 @@ $installerName = "Skys.WiFi.Cutter.Setup.exe"
 $installerLocal = Join-Path $env:LOCALAPPDATA "SkysWiFiCutterBuild\$installerName"
 
 if (-not $SkipBuild) {
+  Write-Host "Stopping running Skys WiFi Cutter processes (avoid EBUSY during build)..."
+  Get-Process -Name "Skys WiFi Cutter", "SkysNativeMeter" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 1
   Write-Host "Building installer..."
   npm run desktop:build
 }

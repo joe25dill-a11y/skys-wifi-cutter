@@ -1,5 +1,5 @@
 import logger from '../utils/logger.js';
-import { getSchedules } from '../storage/scheduleStore.js';
+import { getSchedules, updateSchedule } from '../storage/scheduleStore.js';
 import { getGroups } from '../storage/deviceGroupsStore.js';
 import { deviceStore } from '../storage/deviceStore.js';
 import { deviceController } from './deviceController.js';
@@ -45,6 +45,14 @@ export class RuleScheduler {
     return true;
   }
 
+  async markLastRun(rule) {
+    try {
+      await updateSchedule(rule.id, { lastRunAt: new Date().toISOString() });
+    } catch {
+      // non-fatal
+    }
+  }
+
   async tick() {
     const rules = await getSchedules();
     const devices = await deviceStore.getAll();
@@ -74,6 +82,7 @@ export class RuleScheduler {
             detail: { groupId: group.id, count }
           });
           logger.info(`Schedule ${rule.action} ${group.name} (${count})`);
+          await this.markLastRun(rule);
           continue;
         }
 
@@ -132,6 +141,7 @@ export class RuleScheduler {
           logAudit('schedule_firewall_kill', { mac: device.mac_address, ip: device.ip_address });
           logger.info(`Schedule firewall kill ${device.name}`);
         }
+        await this.markLastRun(rule);
       } catch (error) {
         logger.warn(`Schedule ${rule.id} failed: ${error.message}`);
       }

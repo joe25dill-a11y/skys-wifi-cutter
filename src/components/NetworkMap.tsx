@@ -7,6 +7,11 @@ interface NetworkMapProps {
   deviceBandwidth?: DeviceBandwidth[];
   onSelectDevice: (device: Device) => void;
   localMac?: string;
+  lagMacs?: Set<string>;
+  dnsMacs?: Set<string>;
+  portBlockMacs?: Set<string>;
+  oneWayMacs?: Set<string>;
+  firewallMacs?: Set<string>;
 }
 
 export function NetworkMap({
@@ -14,7 +19,12 @@ export function NetworkMap({
   gatewayIp,
   deviceBandwidth = [],
   onSelectDevice,
-  localMac
+  localMac,
+  lagMacs = new Set(),
+  dnsMacs = new Set(),
+  portBlockMacs = new Set(),
+  oneWayMacs = new Set(),
+  firewallMacs = new Set()
 }: NetworkMapProps) {
   const bwMap = new Map(deviceBandwidth.map((d) => [d.mac, d]));
   const online = devices.filter((d) => d.is_online !== false);
@@ -43,6 +53,14 @@ export function NetworkMap({
           const totalBw = (bw?.upload ?? 0) + (bw?.download ?? 0);
           const isBlocked = device.status === 'blocked';
           const isSelf = device.mac_address === localMac;
+          const macKey = device.mac_address.toUpperCase();
+          const badges: string[] = [];
+          if (isBlocked) badges.push('CUT');
+          if (lagMacs.has(macKey)) badges.push('LAG');
+          if (dnsMacs.has(macKey)) badges.push('DNS');
+          if (portBlockMacs.has(macKey)) badges.push('PORT');
+          if (oneWayMacs.has(macKey)) badges.push('1W');
+          if (firewallMacs.has(macKey)) badges.push('FW');
 
           return (
             <button
@@ -67,6 +85,18 @@ export function NetworkMap({
                 {device.device_type.slice(0, 2).toUpperCase()}
               </div>
               <p className="text-[10px] font-medium mt-1 truncate w-full text-center">{device.name}</p>
+              {badges.length > 0 && (
+                <div className="flex flex-wrap justify-center gap-0.5 mt-0.5">
+                  {badges.map((b) => (
+                    <span
+                      key={b}
+                      className="text-[8px] px-1 rounded bg-slate-800/80 text-white font-bold"
+                    >
+                      {b}
+                    </span>
+                  ))}
+                </div>
+              )}
               {totalBw > 0 && (
                 <p className="text-[9px] text-emerald-600 font-mono">{totalBw.toFixed(1)} Mbps</p>
               )}

@@ -2,7 +2,7 @@
 
 ### Free LAN network manager (NetCut / Arcai-style) for Windows
 
-![Version](https://img.shields.io/badge/version-4.7.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Version](https://img.shields.io/badge/version-4.9.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 Desktop app for managing **your own** WiFi/LAN: device scan, ARP cut, lag switch, hotspot freeze, bandwidth monitor, port/DNS blocks, and more. Uses **Npcap** (LAN) + **WinDivert** (hotspot packet control) — no cloud, no subscription.
 
@@ -36,7 +36,7 @@ Desktop app for managing **your own** WiFi/LAN: device scan, ARP cut, lag switch
 
 ## Beta testers (Windows installer)
 
-Share **`Skys WiFi Cutter Setup.exe`** (v4.7.0). Host using **`website/download.html`** — see **`PUBLIC_RELEASE.md`** for the full checklist.
+Share **`Skys WiFi Cutter Setup.exe`** (v4.8.0). Host using **`website/download.html`** — see **`PUBLIC_RELEASE.md`** for the full checklist.
 
 1. Windows 10/11, **x64 only**
 2. Right-click installer → **Run as administrator** (SmartScreen may warn — unsigned build)

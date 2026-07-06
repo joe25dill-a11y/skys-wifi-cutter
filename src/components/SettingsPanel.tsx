@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Settings, Save, RefreshCw } from 'lucide-react';
+import { Settings, Save, RefreshCw, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch } from '../config/api';
+import { clearSetupComplete } from './SetupWizard';
 
 export interface AppSettings {
   bandwidthAlertMbps: number;
@@ -37,9 +38,10 @@ const DEFAULTS: AppSettings = {
 
 interface SettingsPanelProps {
   onSettingsChange?: (settings: AppSettings) => void;
+  onShowSetupAgain?: () => void;
 }
 
-export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
+export function SettingsPanel({ onSettingsChange, onShowSetupAgain }: SettingsPanelProps) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULTS);
   const [saving, setSaving] = useState(false);
 
@@ -219,7 +221,18 @@ export function SettingsPanel({ onSettingsChange }: SettingsPanelProps) {
         </section>
       </div>
 
-      <div className="mt-5 flex justify-end">
+      <div className="mt-5 flex flex-wrap justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            clearSetupComplete();
+            onShowSetupAgain?.();
+          }}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700"
+        >
+          <RotateCcw className="w-4 h-4" />
+          Show setup again
+        </button>
         <button
           onClick={save}
           disabled={saving}

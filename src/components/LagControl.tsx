@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
-import { Zap, X, Play, Square, Ghost, ArrowDown, ArrowUp } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Zap, X, Play, Square, Ghost, ArrowDown, ArrowUp, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Device } from '../types/device';
 
+interface ActiveLag {
+  outgoingMs?: number;
+  incomingMs?: number;
+}
+
 interface LagControlProps {
   device: Device;
+  activeLag?: ActiveLag | null;
   onClose: () => void;
   onApply: (
     mac: string,
@@ -15,7 +21,10 @@ interface LagControlProps {
   ) => Promise<void>;
   onRemove: (mac: string) => Promise<void>;
   onLagSpike: (mac: string, durationMs: number) => Promise<void>;
-  onGhostPulse?: (mac: string) => Promise<void>;
+  onGhostPulse?: (
+    mac: string,
+    params?: { incomingMs: number; freezeMs: number; count: number }
+  ) => Promise<void>;
 }
 
 const PRESETS = [
@@ -44,6 +53,7 @@ const PRESETS = [
 
 export const LagControl: React.FC<LagControlProps> = ({
   device,
+  activeLag,
   onClose,
   onApply,
   onRemove,
@@ -57,6 +67,20 @@ export const LagControl: React.FC<LagControlProps> = ({
   const [capSpeed, setCapSpeed] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [isActive, setIsActive] = useState(false);
+  const [showCustomGhost, setShowCustomGhost] = useState(false);
+  const [ghostIncomingMs, setGhostIncomingMs] = useState(1200);
+  const [ghostFreezeMs, setGhostFreezeMs] = useState(250);
+  const [ghostCount, setGhostCount] = useState(8);
+
+  useEffect(() => {
+    if (activeLag) {
+      setIsActive(true);
+      if (activeLag.outgoingMs != null) setOutgoingLag(activeLag.outgoingMs);
+      if (activeLag.incomingMs != null) setIncomingLag(activeLag.incomingMs);
+    } else {
+      setIsActive(false);
+    }
+  }, [activeLag, device.mac_address]);
 
   const handleApply = async () => {
     setIsApplying(true);
@@ -96,20 +120,18 @@ export const LagControl: React.FC<LagControlProps> = ({
   };
 
   const handleGhostPulse = async () => {
-    if (onGhostPulse) {
-      setIsApplying(true);
-      try {
-        await onGhostPulse(device.mac_address);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Ghost pulse failed');
-      } finally {
-        setIsApplying(false);
-      }
-      return;
-    }
+    const params = showCustomGhost
+      ? { incomingMs: ghostIncomingMs, freezeMs: ghostFreezeMs, count: ghostCount }
+      : undefined;
     setIsApplying(true);
     try {
-      await onLagSpike(device.mac_address, 1200);
+      if (onGhostPulse) {
+        await onGhostPulse(device.mac_address, params);
+      } else {
+        await onLagSpike(device.mac_address, params?.incomingMs ?? 1200);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Ghost pulse failed');
     } finally {
       setIsApplying(false);
     }
@@ -134,6 +156,12 @@ export const LagControl: React.FC<LagControlProps> = ({
         </div>
 
         <div className="p-6 space-y-5">
+          {isActive && (
+            <div className="rounded-xl border border-purple-400/40 bg-purple-50 dark:bg-purple-950/30 px-3 py-2 text-xs text-purple-800 dark:text-purple-200">
+              Lag active — outgoing {outgoingLag}ms · incoming {incomingLag}ms
+            </div>
+          )}
+
           <p className="text-sm text-slate-600 dark:text-slate-400">
             NetCut-style lag switch on your LAN. MITM delay on incoming, outgoing, or both. Run as
             Administrator.
@@ -230,14 +258,61 @@ export const LagControl: React.FC<LagControlProps> = ({
             </p>
           </div>
 
-          <button
-            onClick={handleGhostPulse}
-            disabled={isApplying}
-            className="w-full py-4 bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg"
-          >
-            <Ghost className="w-5 h-5" />
-            Ghost Pulse (8x burst)
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={handleGhostPulse}
+              disabled={isApplying}
+              className="w-full py-4 bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+            >
+              <Ghost className="w-5 h-5" />
+              Ghost Pulse ({showCustomGhost ? ghostCount : 8}x burst)
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCustomGhost(!showCustomGhost)}
+              className="w-full flex items-center justify-center gap-1 text-xs text-purple-600 dark:text-purple-300 hover:underline"
+            >
+              {showCustomGhost ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              Custom ghost pulse
+            </button>
+            {showCustomGhost && (
+              <div className="grid grid-cols-3 gap-2 p-3 rounded-xl border border-purple-300/40 bg-purple-50/50 dark:bg-purple-950/20">
+                <label className="text-xs text-slate-500">
+                  Incoming ms
+                  <input
+                    type="number"
+                    value={ghostIncomingMs}
+                    onChange={(e) => setGhostIncomingMs(Number(e.target.value))}
+                    min={100}
+                    max={5000}
+                    className="mt-1 w-full px-2 py-1.5 rounded-lg border dark:bg-slate-700 text-sm"
+                  />
+                </label>
+                <label className="text-xs text-slate-500">
+                  Freeze ms
+                  <input
+                    type="number"
+                    value={ghostFreezeMs}
+                    onChange={(e) => setGhostFreezeMs(Number(e.target.value))}
+                    min={50}
+                    max={2000}
+                    className="mt-1 w-full px-2 py-1.5 rounded-lg border dark:bg-slate-700 text-sm"
+                  />
+                </label>
+                <label className="text-xs text-slate-500">
+                  Count
+                  <input
+                    type="number"
+                    value={ghostCount}
+                    onChange={(e) => setGhostCount(Number(e.target.value))}
+                    min={1}
+                    max={20}
+                    className="mt-1 w-full px-2 py-1.5 rounded-lg border dark:bg-slate-700 text-sm"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
 
           <div className="flex gap-2">
             {[200, 500, 1000, 2000].map((ms) => (

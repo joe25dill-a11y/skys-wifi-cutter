@@ -1,172 +1,480 @@
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
+
   <meta charset="UTF-8" />
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>Skys WiFi Cutter — Free LAN Network Manager for Windows</title>
+
   <meta name="description" content="Free NetCut-style LAN manager for Windows. Scan devices, cut, lag switch, bandwidth monitor, hotspot control. No subscription." />
+
   <style>
+
     :root {
+
       --bg: #0f172a;
+
       --card: #1e293b;
+
       --accent: #3b82f6;
+
       --accent2: #6366f1;
+
       --text: #f1f5f9;
+
       --muted: #94a3b8;
+
       --warn: #fbbf24;
+
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
+
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+
       background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+
       color: var(--text);
+
       min-height: 100vh;
+
       line-height: 1.6;
+
     }
+
     .wrap { max-width: 880px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
     header { text-align: center; margin-bottom: 2.5rem; }
+
     .logo {
+
       width: 88px; height: 88px; border-radius: 20px;
+
       margin: 0 auto 1rem; box-shadow: 0 8px 32px rgba(59,130,246,.35);
+
     }
+
     h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); font-weight: 800; letter-spacing: -0.02em; }
+
     .tagline { color: var(--muted); margin-top: 0.5rem; font-size: 1.05rem; }
+
     .card {
+
       background: rgba(30,41,59,.85);
+
       border: 1px solid rgba(99,102,241,.25);
+
       border-radius: 1.25rem;
+
       padding: 1.75rem;
+
       margin-bottom: 1.5rem;
+
       backdrop-filter: blur(8px);
+
     }
+
     .download-btn {
+
       display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+
       width: 100%; max-width: 420px;
+
       padding: 1rem 1.5rem;
+
       font-size: 1.125rem; font-weight: 700;
+
       color: white; text-decoration: none;
+
       background: linear-gradient(135deg, var(--accent), var(--accent2));
+
       border-radius: 0.875rem;
+
       box-shadow: 0 4px 24px rgba(59,130,246,.4);
+
       transition: transform .15s, box-shadow .15s;
+
     }
+
     .download-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(59,130,246,.5); }
+
     .meta { font-size: 0.875rem; color: var(--muted); margin-top: 0.75rem; }
+
     .warn {
+
       background: rgba(251,191,36,.12);
+
       border: 1px solid rgba(251,191,36,.35);
+
       border-radius: 0.75rem;
+
       padding: 1rem 1.25rem;
+
       font-size: 0.9rem;
+
       color: #fde68a;
+
       margin-top: 1.25rem;
+
       text-align: left;
+
     }
+
     .warn ol { margin-top: 0.5rem; padding-left: 1.25rem; }
+
     .warn li { margin-bottom: 0.35rem; }
+
     h2 { font-size: 1.125rem; margin-bottom: 0.75rem; }
+
     ul, ol { padding-left: 1.25rem; color: var(--muted); }
+
     li { margin-bottom: 0.35rem; }
+
     .grid { display: grid; gap: 1rem; }
+
     @media (min-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } }
+
+    .steps-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+
+    .step-card {
+
+      background: rgba(15,23,42,.6);
+
+      border: 1px solid rgba(99,102,241,.2);
+
+      border-radius: 1rem;
+
+      padding: 1.25rem;
+
+      text-align: center;
+
+    }
+
+    .step-mock {
+
+      height: 100px;
+
+      border-radius: 0.75rem;
+
+      margin-bottom: 0.75rem;
+
+      display: flex;
+
+      align-items: center;
+
+      justify-content: center;
+
+      font-size: 2.5rem;
+
+      background: linear-gradient(145deg, rgba(59,130,246,.15), rgba(99,102,241,.1));
+
+      border: 1px dashed rgba(99,102,241,.35);
+
+    }
+
+    .step-card h3 { font-size: 0.95rem; margin-bottom: 0.35rem; color: var(--text); }
+
+    .step-card p { font-size: 0.8rem; color: var(--muted); text-align: left; }
+
+    .feedback-links { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.75rem; }
+
+    .feedback-links a, .feedback-links span {
+
+      display: inline-flex; align-items: center; gap: 0.35rem;
+
+      padding: 0.5rem 0.85rem; border-radius: 0.5rem;
+
+      font-size: 0.85rem; text-decoration: none;
+
+    }
+
+    .feedback-links a { background: rgba(59,130,246,.2); color: #93c5fd; border: 1px solid rgba(59,130,246,.35); }
+
+    .feedback-links a:hover { background: rgba(59,130,246,.35); }
+
+    .feedback-links span { background: rgba(100,116,139,.2); color: var(--muted); border: 1px dashed rgba(148,163,184,.4); }
+
     footer { text-align: center; margin-top: 2rem; font-size: 0.8rem; color: var(--muted); }
+
     footer a { color: var(--accent); text-decoration: none; }
+
     footer a:hover { text-decoration: underline; }
+
     code { background: rgba(0,0,0,.3); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.85em; }
+
     .step-num { color: var(--accent); font-weight: 700; }
+
   </style>
+
 </head>
+
 <body>
+
   <div class="wrap">
+
     <header>
+
       <img class="logo" src="../public/icon.png" alt="Skys WiFi Cutter" width="88" height="88" />
+
       <h1>Skys WiFi Cutter</h1>
+
       <p class="tagline">Free LAN network manager for Windows — scan, cut, lag, bandwidth, hotspot</p>
+
     </header>
 
+
+
     <div class="card" style="text-align:center">
+
       <h2>Download for Windows</h2>
+
       <p style="color:var(--muted);margin-bottom:1.25rem">
-        Version <strong id="ver">4.7.0</strong> · Windows 10/11 · 64-bit · ~130 MB
+
+        Version <strong id="ver">4.9.0</strong> · Windows 10/11 · 64-bit · ~130 MB
+
       </p>
+
       <a class="download-btn" id="dl" href="#">
+
         ⬇ Download Skys WiFi Cutter
+
       </a>
+
       <p class="meta">Requires Administrator · Npcap installs automatically if needed</p>
+
       <p class="meta" style="margin-top:0.5rem">
+
         SHA256:
-        <a id="checksum-link" href="Skys-WiFi-Cutter-v4.7.0-sha256.txt" style="color:var(--accent);font-family:monospace;font-size:0.8rem">
-          Skys-WiFi-Cutter-v4.7.0-sha256.txt
+
+        <a id="checksum-link" href="Skys-WiFi-Cutter-v4.8.0-sha256.txt" style="color:var(--accent);font-family:monospace;font-size:0.8rem">
+
+          Skys-WiFi-Cutter-v4.8.0-sha256.txt
+
         </a>
+
       </p>
+
       <div class="warn">
+
         <strong>Windows SmartScreen may warn</strong> — this build is not code-signed yet.
+
         <ol>
+
           <li>When SmartScreen blocks the download, click <strong>Keep</strong> or <strong>⋯ → Keep anyway</strong> in your browser if needed.</li>
+
           <li>Right-click the installer → <strong>Run as administrator</strong>.</li>
+
           <li>If a blue SmartScreen dialog appears, click <strong>More info</strong>, then <strong>Run anyway</strong>.</li>
+
         </ol>
+
         Use only on networks you own. Unauthorized interference with others&apos; internet is illegal.
+
       </div>
+
     </div>
 
-    <div class="grid">
-      <div class="card">
-        <h2>Install steps</h2>
-        <ol>
-          <li><span class="step-num">1.</span> Download <code>Skys.WiFi.Cutter.Setup.exe</code> from the button above.</li>
-          <li><span class="step-num">2.</span> Right-click → <strong>Run as administrator</strong> (required for cut, lag, hotspot).</li>
-          <li><span class="step-num">3.</span> Allow Npcap if prompted; reboot once if scan/cut fails after first install.</li>
-          <li><span class="step-num">4.</span> Launch from Start Menu — complete the setup wizard, then <strong>Scan</strong>.</li>
-          <li><span class="step-num">5.</span> Optional: enable phone remote in <strong>Tools → Remote</strong>, then open
-            <code>http://&lt;PC-IP&gt;:3001/remote</code> on your phone (same WiFi).</li>
-        </ol>
-      </div>
-      <div class="card">
-        <h2>Features (v4.6.x)</h2>
-        <ul>
-          <li>Device scan &amp; manufacturer lookup</li>
-          <li>Cut / restore / cut all + network defense</li>
-          <li>Lag switch, speed limits, ghost pulse</li>
-          <li>Per-device bandwidth metering</li>
-          <li>Hotspot freeze &amp; gaming mode</li>
-          <li>DNS &amp; port blocks + game presets</li>
-          <li>Schedules, groups, automation rules</li>
-          <li>Mobile remote page (opt-in PIN)</li>
-        </ul>
-      </div>
-    </div>
+
 
     <div class="card">
-      <h2>Having issues?</h2>
-      <ul>
-        <li>Run as Administrator for cut/lag/hotspot</li>
-        <li>Reboot once after first install if scan fails</li>
-        <li>Guest WiFi / AP isolation can block ARP cut — use the cut troubleshooting wizard in Tools</li>
-        <li>In app: <strong>Tools → Diagnostics → Copy feedback report</strong>, then paste into a
-          <a href="https://github.com/joe25dill-a11y/skys-wifi-cutter/issues" style="color:var(--accent)">GitHub issue</a></li>
-      </ul>
+
+      <h2>First-time install (visual guide)</h2>
+
+      <p style="color:var(--muted);font-size:0.9rem;margin-bottom:1rem">No screenshots bundled — these cards show what to expect at each step.</p>
+
+      <div class="steps-grid">
+
+        <div class="step-card">
+
+          <div class="step-mock">🛡️</div>
+
+          <h3>1. SmartScreen</h3>
+
+          <p>Browser or Windows may flag the unsigned installer. Choose <strong>Keep</strong>, then <strong>More info → Run anyway</strong>.</p>
+
+        </div>
+
+        <div class="step-card">
+
+          <div class="step-mock">👑</div>
+
+          <h3>2. Run as admin</h3>
+
+          <p>Right-click <code>Skys.WiFi.Cutter.Setup.exe</code> → <strong>Run as administrator</strong>. Required for cut, lag, and hotspot.</p>
+
+        </div>
+
+        <div class="step-card">
+
+          <div class="step-mock">🧙</div>
+
+          <h3>3. Setup wizard</h3>
+
+          <p>On first launch, accept the legal notice, confirm Admin/Npcap checks, then <strong>Scan</strong> your network.</p>
+
+        </div>
+
+        <div class="step-card">
+
+          <div class="step-mock">📱</div>
+
+          <h3>4. Phone remote (optional)</h3>
+
+          <p>Tools → Remote → enable + PIN → scan QR or open <code>http://&lt;PC-IP&gt;:3001/remote</code> on same WiFi.</p>
+
+        </div>
+
+      </div>
+
     </div>
 
+
+
+    <div class="grid">
+
+      <div class="card">
+
+        <h2>Install steps</h2>
+
+        <ol>
+
+          <li><span class="step-num">1.</span> Download <code>Skys.WiFi.Cutter.Setup.exe</code> from the button above.</li>
+
+          <li><span class="step-num">2.</span> Right-click → <strong>Run as administrator</strong> (required for cut, lag, hotspot).</li>
+
+          <li><span class="step-num">3.</span> Allow Npcap if prompted; reboot once if scan/cut fails after first install.</li>
+
+          <li><span class="step-num">4.</span> Launch from Start Menu — complete the setup wizard, then <strong>Scan</strong>.</li>
+
+          <li><span class="step-num">5.</span> Optional: enable phone remote in <strong>Tools → Remote</strong>, then open
+
+            <code>http://&lt;PC-IP&gt;:3001/remote</code> on your phone (same WiFi).</li>
+
+        </ol>
+
+      </div>
+
+      <div class="card">
+
+        <h2>Features (v4.8)</h2>
+
+        <ul>
+
+          <li>Device scan &amp; manufacturer lookup</li>
+
+          <li>Cut / restore / cut all + network defense</li>
+
+          <li>Lag switch, custom ghost pulse, speed limits</li>
+
+          <li>Per-device bandwidth metering</li>
+
+          <li>Hotspot freeze &amp; gaming mode</li>
+
+          <li>DNS &amp; port blocks + game presets</li>
+
+          <li>Schedules, groups, automation rules</li>
+
+          <li>Mobile remote + QR code (opt-in PIN)</li>
+
+          <li>Restored-cuts banner &amp; cut troubleshooting wizard</li>
+
+        </ul>
+
+      </div>
+
+    </div>
+
+
+
+    <div class="card">
+
+      <h2>Having issues?</h2>
+
+      <ul>
+
+        <li>Run as Administrator for cut/lag/hotspot</li>
+
+        <li>Reboot once after first install if scan fails</li>
+
+        <li>Guest WiFi / AP isolation can block ARP cut — use the cut troubleshooting wizard in Tools</li>
+
+        <li>In app: <strong>Tools → Diagnostics → Copy feedback report</strong>, then paste into a
+
+          <a href="https://github.com/joe25dill-a11y/skys-wifi-cutter/issues" style="color:var(--accent)">GitHub issue</a></li>
+
+      </ul>
+
+    </div>
+
+
+
+    <div class="card">
+
+      <h2>Feedback &amp; community</h2>
+
+      <p style="color:var(--muted);font-size:0.9rem">Bug reports and feature requests — GitHub Issues is the primary channel.</p>
+
+      <div class="feedback-links">
+
+        <a href="https://github.com/joe25dill-a11y/skys-wifi-cutter/issues">🐛 GitHub Issues (primary)</a>
+
+        <span title="Coming soon">💬 Discord — link TBD</span>
+
+        <span title="Coming soon">✉️ Email — support@example.com (placeholder)</span>
+
+      </div>
+
+    </div>
+
+
+
     <footer>
+
       <p>Local-only · No cloud · No subscription · MIT License</p>
+
       <p style="margin-top:0.5rem">
+
         <a href="https://github.com/joe25dill-a11y/skys-wifi-cutter">Source on GitHub</a>
+
         · <a href="https://github.com/joe25dill-a11y/skys-wifi-cutter/issues">Report bugs</a>
+
       </p>
+
     </footer>
+
   </div>
+
   <script>
-    const VERSION = '4.7.0';
+
+    const VERSION = '4.9.0';
+
     const REPO = 'joe25dill-a11y/skys-wifi-cutter';
+
     const INSTALLER = 'Skys.WiFi.Cutter.Setup.exe';
+
     document.getElementById('ver').textContent = VERSION;
+
     document.getElementById('dl').href =
+
       'https://github.com/' + REPO + '/releases/download/v' + VERSION + '/' + INSTALLER;
+
     document.getElementById('checksum-link').href =
+
       'Skys-WiFi-Cutter-v' + VERSION + '-sha256.txt';
+
     document.getElementById('checksum-link').textContent =
+
       'Skys-WiFi-Cutter-v' + VERSION + '-sha256.txt';
+
   </script>
+
 </body>
+
 </html>
+

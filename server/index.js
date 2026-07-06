@@ -39,7 +39,7 @@ import { checkForUpdates } from './services/updateChecker.js';
 import { runNativeKick } from './utils/nativeEngine.js';
 import { runInternetSpeedTest } from './services/speedTest.js';
 import { normalizeMac } from './services/arpTable.js';
-import { logAudit, getAuditLog, clearAuditLog } from './storage/auditLogStore.js';
+import { logAudit, getAuditLog, getAuditLogByMac, exportAuditLogCsv, clearAuditLog } from './storage/auditLogStore.js';
 import { getSettings, updateSettings, maskSettingsForClient } from './storage/appSettingsStore.js';
 import { generateHotspotPassword } from './utils/hotspotPassword.js';
 import {
@@ -56,10 +56,11 @@ import { exportAppData, importAppData } from './services/settingsExport.js';
 import { evaluateBandwidthAlerts, getLastAlerts } from './services/bandwidthAlerts.js';
 import { startMitmMonitor, stopMitmMonitor, getMitmIssues } from './services/mitmMonitor.js';
 import { evaluateAutomationRules } from './services/rulesEngine.js';
-import { getRules, addRule, deleteRule } from './storage/rulesStore.js';
+import { getRules, addRule, deleteRule, updateRule } from './storage/rulesStore.js';
 import { getGamePresets, getGamePreset } from './services/gamePresets.js';
 import { requireRemotePin } from './middleware/remoteAuth.js';
 import { runCutTroubleshoot } from './services/cutTroubleshoot.js';
+import { logScanDeviceEvents } from './utils/deviceScanAudit.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { getSystemChecks } from './utils/systemChecks.js';
 import logger from './utils/logger.js';
@@ -137,8 +138,13 @@ app.use(express.json({ limit: '10mb' }));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
-  message: 'Too many requests from this IP, please try again later'
+  max: 2000,
+  skip: (req) => isLocalRequest(req),
+  handler: (req, res) => {
+    res.status(429).json({
+      error: 'Too many requests from this IP, please try again later'
+    });
+  }
 });
 
 app.use('/api/', limiter);
@@ -161,6 +167,8 @@ arpSpoofer.setOnCutExit(async (macAddress) => {
   deviceController.blockedDevices.delete(macAddress);
   await deviceStore.resetStatusIfBlocked(macAddress);
 });
+
+let restoredCutsCount = 0;
 
 app.get('/api/health', async (req, res) => {
   let networkInfo = null;
@@ -186,6 +194,7 @@ app.get('/api/health', async (req, res) => {
       ? { ...networkInfo, mac: normalizeMac(networkInfo.mac) }
       : null,
     activeCuts: arpSpoofer.getActiveCuts().length,
+    restoredCutsCount,
     speedLimits: deviceController.getActiveSpeedLimits(),
     lagSwitches: lagController.getActiveLags(),
     dnsLocks: dnsHijack.getActiveMacs(),
@@ -249,8 +258,10 @@ app.post('/api/devices/refresh', async (req, res, next) => {
   try {
     const deep = Boolean(req.body?.deep);
     logger.info('Device scan requested', { deep });
+    const before = await deviceStore.getAll();
     const scanned = await networkScanner.scanNetwork({ deep });
     const devices = await deviceStore.upsertFromScan(scanned);
+    logScanDeviceEvents(before, devices);
     await ensureFlowTrackerRunning();
     logAudit('device_scan', { detail: { deep, count: scanned.length } });
     logger.info('Device scan completed', { count: scanned.length });
@@ -263,8 +274,10 @@ app.post('/api/devices/refresh', async (req, res, next) => {
 app.post('/api/devices/quick-scan', async (req, res, next) => {
   try {
     invalidateArpCache();
+    const before = await deviceStore.getAll();
     const scanned = await networkScanner.scanNetwork({ deep: false });
     const devices = await deviceStore.upsertFromScan(scanned);
+    logScanDeviceEvents(before, devices);
     logAudit('quick_scan', { detail: { count: scanned.length } });
     res.json({ success: true, count: scanned.length, devices });
   } catch (err) {
@@ -381,6 +394,7 @@ app.patch('/api/devices/:mac/favorite', async (req, res, next) => {
     const mac = validateMAC(req.params.mac);
     const favorite = Boolean(req.body?.favorite);
     const updated = await deviceStore.setFavorite(mac, favorite);
+    logAudit(favorite ? 'favorite_on' : 'favorite_off', { mac, ip: updated?.ip_address });
     if (!updated) {
       throw new ValidationError('Device not found', 'mac');
     }
@@ -433,6 +447,7 @@ app.post('/api/devices/:mac/dns-block', async (req, res, next) => {
       domains: req.body?.domains
     });
     await deviceStore.setDnsBlocked(mac, true);
+    logAudit('dns_block', { mac, ip: device.ip_address, detail: { preset: req.body?.preset } });
     res.json({ ...result, device: await deviceStore.getByMac(mac) });
   } catch (err) {
     next(err);
@@ -449,6 +464,7 @@ app.post('/api/devices/:mac/dns-unblock', async (req, res, next) => {
 
     const result = await dnsHijack.stop(mac, device.ip_address);
     await deviceStore.setDnsBlocked(mac, false);
+    logAudit('dns_unblock', { mac, ip: device.ip_address });
     res.json({ ...result, device: await deviceStore.getByMac(mac) });
   } catch (err) {
     next(err);
@@ -460,6 +476,35 @@ app.get('/api/devices/:mac/usage', async (req, res, next) => {
     const mac = validateMAC(req.params.mac);
     const hours = Math.min(168, Math.max(1, Number(req.query.hours) || 24));
     res.json(await getDeviceUsageHistory(mac, hours));
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/devices/:mac/history', (req, res, next) => {
+  try {
+    const mac = validateMAC(req.params.mac);
+    const limit = Math.min(500, parseInt(req.query.limit, 10) || 100);
+    const hours = Math.min(2160, parseInt(req.query.hours, 10) || 720);
+    res.json({ entries: getAuditLogByMac(mac, { limit, hours }) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/devices/:mac/history/export', (req, res, next) => {
+  try {
+    const mac = validateMAC(req.params.mac);
+    const limit = Math.min(2000, parseInt(req.query.limit, 10) || 500);
+    const hours = Math.min(2160, parseInt(req.query.hours, 10) || 720);
+    const entries = getAuditLogByMac(mac, { limit, hours });
+    const safeMac = mac.replace(/:/g, '-');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="skys-device-history-${safeMac}.csv"`
+    );
+    res.send(exportAuditLogCsv(entries));
   } catch (err) {
     next(err);
   }
@@ -524,6 +569,7 @@ app.post('/api/devices/:mac/port-block', async (req, res, next) => {
       preset: req.body?.preset,
       ports: req.body?.ports
     });
+    logAudit('port_block', { mac, ip: device.ip_address, detail: { preset: req.body?.preset } });
     res.json(result);
   } catch (err) {
     next(err);
@@ -608,6 +654,15 @@ app.post('/api/rules', async (req, res, next) => {
 app.delete('/api/rules/:id', async (req, res, next) => {
   try {
     const rules = await deleteRule(req.params.id);
+    res.json({ rules });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.patch('/api/rules/:id', async (req, res, next) => {
+  try {
+    const rules = await updateRule(req.params.id, req.body);
     res.json({ rules });
   } catch (err) {
     next(err);
@@ -703,7 +758,9 @@ app.post('/api/devices/:mac/port-unblock', async (req, res, next) => {
       throw new ValidationError('Device not found', 'mac');
     }
 
-    res.json(await portBlocker.stop(mac, device.ip_address));
+    const result = await portBlocker.stop(mac, device.ip_address);
+    logAudit('port_unblock', { mac, ip: device.ip_address });
+    res.json(result);
   } catch (err) {
     next(err);
   }
@@ -722,6 +779,7 @@ app.post('/api/devices/:mac/one-way-kill', async (req, res, next) => {
     }
 
     const result = await oneWayKill.start(mac, validateIP(device.ip_address));
+    logAudit('one_way_kill_start', { mac, ip: device.ip_address });
     res.json(result);
   } catch (err) {
     next(err);
@@ -736,7 +794,9 @@ app.post('/api/devices/:mac/one-way-kill-stop', async (req, res, next) => {
       throw new ValidationError('Device not found', 'mac');
     }
 
-    res.json(await oneWayKill.stop(mac, device.ip_address));
+    const result = await oneWayKill.stop(mac, device.ip_address);
+    logAudit('one_way_kill_stop', { mac, ip: device.ip_address });
+    res.json(result);
   } catch (err) {
     next(err);
   }
@@ -775,7 +835,9 @@ app.patch('/api/devices/:mac/notes', async (req, res, next) => {
   try {
     const mac = validateMAC(req.params.mac);
     const notes = String(req.body.notes ?? '').slice(0, 500);
+    const device = await deviceStore.getByMac(mac);
     const updated = await deviceStore.updateNotes(mac, notes);
+    logAudit('notes_changed', { mac, ip: device?.ip_address, detail: { length: notes.length } });
     if (!updated) {
       throw new ValidationError('Device not found', 'mac');
     }
@@ -882,10 +944,12 @@ app.patch('/api/devices/:mac/rename', async (req, res, next) => {
     if (!name || name.length > 64) {
       throw new ValidationError('Name must be 1-64 characters', 'name');
     }
+    const device = await deviceStore.getByMac(mac);
     const updated = await deviceStore.rename(mac, name);
     if (!updated) {
       throw new ValidationError('Device not found', 'mac');
     }
+    logAudit('device_renamed', { mac, ip: device?.ip_address, detail: { name } });
     res.json(updated);
   } catch (err) {
     next(err);
@@ -928,8 +992,10 @@ app.post('/api/devices/:mac/toggle', async (req, res, next) => {
 
     if (newStatus === 'blocked') {
       await deviceController.blockDevice(mac, ip);
+      logAudit('cut', { mac, ip });
     } else {
       await deviceController.unblockDevice(mac, ip);
+      logAudit('uncut', { mac, ip });
     }
 
     const updated = await deviceStore.updateStatus(mac, newStatus);
@@ -957,6 +1023,7 @@ app.post('/api/devices/:mac/limit-speed', async (req, res, next) => {
       uploadKbps,
       downloadKbps
     );
+    logAudit('speed_limit', { mac, ip, detail: { uploadKbps, downloadKbps } });
 
     res.json(result);
   } catch (err) {
@@ -975,6 +1042,7 @@ app.post('/api/devices/:mac/remove-speed-limit', async (req, res, next) => {
 
     const ip = validateIP(device.ip_address);
     const result = await deviceController.removeSpeedLimit(mac, ip);
+    logAudit('speed_limit_removed', { mac, ip });
     res.json(result);
   } catch (err) {
     next(err);
@@ -1004,6 +1072,11 @@ app.post('/api/devices/:mac/lag-control', async (req, res, next) => {
 
     const ip = validateIP(device.ip_address);
     await lagController.applyLag(mac, ip, outgoingMs, incomingMs, uploadKbps, downloadKbps);
+    logAudit('lag_applied', {
+      mac,
+      ip,
+      detail: { outgoingMs, incomingMs, uploadKbps, downloadKbps }
+    });
     res.json({ success: true, message: 'Lag switch applied' });
   } catch (err) {
     next(err);
@@ -1021,6 +1094,7 @@ app.post('/api/devices/:mac/remove-lag', async (req, res, next) => {
 
     const ip = validateIP(device.ip_address);
     await lagController.removeLag(mac, ip);
+    logAudit('lag_removed', { mac, ip });
     res.json({ success: true, message: 'Lag control removed successfully' });
   } catch (err) {
     next(err);
@@ -1441,13 +1515,45 @@ app.delete('/api/audit', (req, res) => {
 });
 
 async function buildDiagnosticsPayload() {
-  const [checks, hotspot] = await Promise.all([
+  const [checks, hotspot, troubleshoot] = await Promise.all([
     getSystemChecks(),
-    hotspotController.getStatus()
+    hotspotController.getStatus(),
+    runCutTroubleshoot()
   ]);
+
+  let internetOk = false;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch('https://api.github.com/zen', { signal: ctrl.signal });
+    clearTimeout(timer);
+    internetOk = res.ok;
+  } catch {
+    internetOk = false;
+  }
+
+  const windivertOk = Boolean(hotspot.windivert?.bundled);
+  const defense = networkDefense.getStatus();
+
+  const dashboard = [
+    { id: 'admin', label: 'Administrator', status: checks.isAdmin ? 'ok' : 'error', detail: checks.isAdmin ? 'Elevated' : 'Run as admin' },
+    { id: 'npcap', label: 'Npcap', status: checks.npcap ? 'ok' : 'error', detail: checks.npcap ? 'Installed' : 'Missing' },
+    { id: 'native', label: 'Native engine', status: checks.nativeMeter ? 'ok' : 'warn', detail: checks.nativeMeter ? 'SkysNativeMeter ready' : 'Python fallback' },
+    { id: 'cut', label: 'Cut engine', status: checks.cutReady ? 'ok' : 'error', detail: checks.cutReady ? 'Ready' : 'Not ready' },
+    { id: 'windivert', label: 'WinDivert', status: windivertOk ? 'ok' : 'warn', detail: windivertOk ? 'Bundled' : 'Hotspot may use fallback' },
+    { id: 'gateway', label: 'Gateway reachable', status: troubleshoot.gatewayReachable ? 'ok' : 'warn', detail: troubleshoot.gatewayIp || 'Unknown' },
+    { id: 'subnet', label: 'Same subnet', status: troubleshoot.sameSubnet ? 'ok' : 'warn', detail: troubleshoot.sameSubnet ? 'OK' : 'Check network' },
+    { id: 'internet', label: 'Internet', status: internetOk ? 'ok' : 'warn', detail: internetOk ? 'Reachable' : 'Offline or blocked' },
+    { id: 'hotspot', label: 'Hotspot support', status: checks.hotspotReady ? 'ok' : 'warn', detail: checks.hotspotReady ? 'Ready' : 'May need admin/Python' },
+    { id: 'api', label: 'Local API', status: 'ok', detail: `v${APP_VERSION}` },
+    { id: 'defense', label: 'Cut Defender', status: defense.enabled ? 'ok' : 'warn', detail: defense.enabled ? 'Gateway pinned' : 'Off' }
+  ];
+
   return {
     version: APP_VERSION,
     checks,
+    troubleshoot,
+    dashboard,
     hotspot: {
       isActive: hotspot.isActive,
       windowsHotspotActive: hotspot.windowsHotspotActive,
@@ -1727,6 +1833,7 @@ async function bootstrap() {
   if (blocked.length > 0) {
     logger.info(`Restoring ${blocked.length} blocked device(s) from saved state`);
     await arpSpoofer.restorePersistedCuts(blocked);
+    restoredCutsCount = blocked.length;
   }
 }
 

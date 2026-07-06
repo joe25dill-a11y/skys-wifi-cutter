@@ -4,6 +4,21 @@ import { Sparkles, X } from 'lucide-react';
 const VERSION_KEY = 'skys-last-seen-version';
 
 const HIGHLIGHTS: Record<string, string[]> = {
+  '4.9.0': [
+    'Per-device History tab — cuts, lag, DNS, renames, online/offline; export CSV',
+    'Unified diagnostics dashboard — green/yellow/red status chips + cut troubleshoot tips',
+    'Smarter search — notes, group, favorite, status, multi-word filters',
+    'Network map shows CUT/LAG/DNS/PORT badges on devices',
+    'Settings backup v2 (still imports v1); vendor lookup cache for faster scans'
+  ],
+  '4.8.0': [
+    'Tools tab sticky sub-nav — jump to Defense, Schedules, Remote, Rules, and more',
+    'Remote panel QR code for phone URL · download page install walkthrough cards',
+    'Lag switch syncs active state · custom ghost pulse (incoming/freeze/count)',
+    'Schedule last-run tracking · missed-slot hints · rules in backup export',
+    '1WAY / FIREWALL / port preset badges · restored-cuts banner on startup',
+    'Hotspot advanced accordion · quit warning when hotspot active · skip update version'
+  ],
   '4.7.0': [
     'Accident-proof confirms — Cut All requires typing CUT; kick, firewall kill, and new-device cut ask first',
     '5-second undo toast after Cut All with Restore All',

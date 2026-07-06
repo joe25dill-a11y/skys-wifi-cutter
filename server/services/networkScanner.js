@@ -15,6 +15,7 @@ export class NetworkScanner {
   constructor() {
     this.isScanning = false;
     this.hostnameCache = new Map();
+    this.vendorCache = new Map();
     this._networkInfoCache = null;
     this._networkInfoCacheAt = 0;
   }
@@ -48,11 +49,13 @@ export class NetworkScanner {
   getDeviceManufacturer(macAddress) {
     try {
       const oui = macAddress.replace(/[^0-9a-f]/gi, '').toUpperCase().substring(0, 6);
-      const vendor = ouiData[oui];
-      if (!vendor) {
-        return 'Unknown';
+      if (this.vendorCache.has(oui)) {
+        return this.vendorCache.get(oui);
       }
-      return vendor.split('\n')[0].trim();
+      const vendor = ouiData[oui];
+      const label = vendor ? vendor.split('\n')[0].trim() : 'Unknown';
+      this.vendorCache.set(oui, label);
+      return label;
     } catch {
       return 'Unknown';
     }

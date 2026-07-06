@@ -1,9 +1,9 @@
 import { getGroups } from '../storage/deviceGroupsStore.js';
 import { getSettings, maskSettingsForClient } from '../storage/appSettingsStore.js';
-import { getSchedules } from '../storage/scheduleStore.js';
+import { getRules, saveRules } from '../storage/rulesStore.js';
 import { deviceStore } from '../storage/deviceStore.js';
 import { updateSettings } from '../storage/appSettingsStore.js';
-import { saveSchedules } from '../storage/scheduleStore.js';
+import { saveSchedules, getSchedules } from '../storage/scheduleStore.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { getDataDir } from '../utils/paths.js';
@@ -11,11 +11,12 @@ import { getDataDir } from '../utils/paths.js';
 export async function exportAppData() {
   const devices = await deviceStore.getAll();
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     settings: maskSettingsForClient(await getSettings()),
     groups: await getGroups(),
     schedules: await getSchedules(),
+    rules: (await getRules()).rules,
     devices: devices.map((d) => ({
       mac_address: d.mac_address,
       name: d.name,
@@ -28,7 +29,8 @@ export async function exportAppData() {
 }
 
 export async function importAppData(payload) {
-  if (!payload || payload.version !== 1) {
+  const version = payload?.version;
+  if (!payload || (version !== 1 && version !== 2)) {
     throw new Error('Invalid or unsupported backup format');
   }
 
@@ -44,6 +46,10 @@ export async function importAppData(payload) {
 
   if (Array.isArray(payload.schedules)) {
     await saveSchedules(payload.schedules);
+  }
+
+  if (Array.isArray(payload.rules)) {
+    await saveRules(payload.rules);
   }
 
   if (Array.isArray(payload.devices)) {
