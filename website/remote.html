@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Skys Remote — WiFi Cutter</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --accent: #6366f1;
+      --danger: #dc2626;
+      --ok: #16a34a;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    .wrap { max-width: 480px; margin: 0 auto; padding: 1rem; }
+    h1 { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(99,102,241,.25);
+      border-radius: 1rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.25rem; }
+    input {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 0.625rem;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: var(--text);
+      font-size: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    button {
+      width: 100%;
+      padding: 0.75rem;
+      border: none;
+      border-radius: 0.625rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-ok { background: var(--ok); color: white; }
+    .btn-ghost { background: #334155; color: var(--text); margin-top: 0.5rem; }
+    .status { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
+    .error { color: #fca5a5; font-size: 0.85rem; margin-top: 0.5rem; }
+    .device {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #334155;
+    }
+    .device:last-child { border-bottom: none; }
+    .device-name { font-weight: 600; font-size: 0.9rem; }
+    .device-meta { font-size: 0.7rem; color: var(--muted); font-family: monospace; }
+    .badge {
+      font-size: 0.65rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 999px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .badge-cut { background: rgba(220,38,38,.2); color: #fca5a5; }
+    .badge-ok { background: rgba(22,163,74,.2); color: #86efac; }
+    .actions { display: flex; gap: 0.35rem; }
+    .actions button { width: auto; padding: 0.45rem 0.65rem; font-size: 0.75rem; }
+    .hidden { display: none; }
+    .hotspot-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Skys Remote</h1>
+    <p class="sub">Control cuts from your phone on the same WiFi</p>
+
+    <div id="login" class="card">
+      <label for="host">PC IP address</label>
+      <input id="host" type="text" inputmode="decimal" placeholder="192.168.1.100" autocomplete="off" />
+      <label for="pin">Remote PIN</label>
+      <input id="pin" type="password" inputmode="numeric" placeholder="4+ digits" autocomplete="off" />
+      <button class="btn-primary" id="connect">Connect</button>
+      <p class="status">Enable remote in Tools → Remote on the PC, set a PIN, restart the app.</p>
+      <p id="login-error" class="error hidden"></p>
+    </div>
+
+    <div id="panel" class="hidden">
+      <div class="card">
+        <p id="summary" class="status"></p>
+        <div class="hotspot-row">
+          <button class="btn-danger" id="freeze">Freeze hotspot</button>
+          <button class="btn-ok" id="unfreeze">Unfreeze</button>
+        </div>
+        <button class="btn-ghost" id="refresh">Refresh</button>
+      </div>
+
+      <div class="card">
+        <h2 style="font-size:0.95rem;margin-bottom:0.5rem">Devices</h2>
+        <div id="devices"></div>
+        <p id="panel-error" class="error hidden"></p>
+      </div>
+
+      <button class="btn-ghost" id="disconnect">Disconnect</button>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'skys-remote-config';
+
+    function loadConfig() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      } catch {
+        return {};
+      }
+    }
+
+    function saveConfig(host, pin) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ host, pin }));
+    }
+
+    function apiBase(host) {
+      const h = host.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      return `http://${h}:3001/api/remote`;
+    }
+
+    async function remoteFetch(host, pin, path, options = {}) {
+      const url = `${apiBase(host)}${path}`;
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Remote-Pin': pin,
+          ...(options.headers || {})
+        }
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      return body;
+    }
+
+    const loginEl = document.getElementById('login');
+    const panelEl = document.getElementById('panel');
+    const hostInput = document.getElementById('host');
+    const pinInput = document.getElementById('pin');
+    const loginError = document.getElementById('login-error');
+    const panelError = document.getElementById('panel-error');
+    const summary = document.getElementById('summary');
+    const devicesEl = document.getElementById('devices');
+
+    let state = { host: '', pin: '' };
+
+    const cfg = loadConfig();
+    if (cfg.host) hostInput.value = cfg.host;
+    if (cfg.pin) pinInput.value = cfg.pin;
+
+    function showError(el, msg) {
+      el.textContent = msg || '';
+      el.classList.toggle('hidden', !msg);
+    }
+
+    async function refresh() {
+      showError(panelError, '');
+      const status = await remoteFetch(state.host, state.pin, '/status');
+      summary.textContent = `v${status.version} · ${status.deviceCount} devices · ${status.cutCount} cut · Hotspot: ${
+        status.hotspotActive ? (status.hotspotFrozen ? 'FROZEN' : 'ON') : 'OFF'
+      } (${status.connectedClients} clients)`;
+
+      const list = await remoteFetch(state.host, state.pin, '/devices');
+      devicesEl.innerHTML = '';
+      if (!list.devices?.length) {
+        devicesEl.innerHTML = '<p class="status">No devices — run Scan on the PC first.</p>';
+        return;
+      }
+      for (const d of list.devices) {
+        const row = document.createElement('div');
+        row.className = 'device';
+        const cut = d.status === 'blocked';
+        row.innerHTML = `
+          <div>
+            <div class="device-name">${escapeHtml(d.name || d.mac)}</div>
+            <div class="device-meta">${escapeHtml(d.ip || '')} · ${escapeHtml(d.mac)}</div>
+          </div>
+          <div class="actions">
+            <span class="badge ${cut ? 'badge-cut' : 'badge-ok'}">${cut ? 'cut' : 'ok'}</span>
+            <button class="btn-danger" data-action="cut" data-mac="${escapeAttr(d.mac)}">Cut</button>
+            <button class="btn-ok" data-action="restore" data-mac="${escapeAttr(d.mac)}">Restore</button>
+          </div>`;
+        devicesEl.appendChild(row);
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function escapeAttr(s) {
+      return String(s).replace(/"/g, '&quot;');
+    }
+
+    document.getElementById('connect').addEventListener('click', async () => {
+      showError(loginError, '');
+      const host = hostInput.value.trim();
+      const pin = pinInput.value.trim();
+      if (!host || !pin) {
+        showError(loginError, 'Enter PC IP and PIN');
+        return;
+      }
+      try {
+        await remoteFetch(host, pin, '/status');
+        state = { host, pin };
+        saveConfig(host, pin);
+        loginEl.classList.add('hidden');
+        panelEl.classList.remove('hidden');
+        await refresh();
+      } catch (err) {
+        showError(loginError, err.message || 'Connection failed');
+      }
+    });
+
+    document.getElementById('refresh').addEventListener('click', () => refresh().catch((e) => showError(panelError, e.message)));
+    document.getElementById('freeze').addEventListener('click', async () => {
+      try {
+        await remoteFetch(state.host, state.pin, '/hotspot/freeze', { method: 'POST', body: '{}' });
+        await refresh();
+      } catch (err) {
+        showError(panelError, err.message);
+      }
+    });
+    document.getElementById('unfreeze').addEventListener('click', async () => {
+      try {
+        await remoteFetch(state.host, state.pin, '/hotspot/unfreeze', { method: 'POST', body: '{}' });
+        await refresh();
+      } catch (err) {
+        showError(panelError, err.message);
+      }
+    });
+    document.getElementById('disconnect').addEventListener('click', () => {
+      panelEl.classList.add('hidden');
+      loginEl.classList.remove('hidden');
+    });
+
+    devicesEl.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const mac = btn.dataset.mac;
+      const action = btn.dataset.action;
+      try {
+        await remoteFetch(state.host, state.pin, `/devices/${encodeURIComponent(mac)}/${action}`, {
+          method: 'POST',
+          body: '{}'
+        });
+        await refresh();
+      } catch (err) {
+        showError(panelError, err.message);
+      }
+    });
+  </script>
+</body>
+</html>

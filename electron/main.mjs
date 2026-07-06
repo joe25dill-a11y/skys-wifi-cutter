@@ -189,6 +189,15 @@ function createTray() {
   tray = new Tray(resolveTrayIcon());
   tray.setToolTip('Skys WiFi Cutter');
 
+  const callApi = async (path, method = 'POST') => {
+    try {
+      const res = await fetch(`http://127.0.0.1:${PORT}/api${path}`, { method });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
+
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Show Skys WiFi Cutter',
@@ -212,6 +221,31 @@ function createTray() {
         if (mainWindow) {
           mainWindow.show();
           mainWindow.focus();
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Restore all devices',
+      click: async () => {
+        const ok = await callApi('/devices/restore-all');
+        if (tray) {
+          tray.displayBalloon({
+            title: 'Skys WiFi Cutter',
+            content: ok ? 'All devices restored.' : 'Restore failed — open the app.'
+          });
+        }
+      }
+    },
+    {
+      label: 'Panic stop all',
+      click: async () => {
+        const ok = await callApi('/diagnostics/panic');
+        if (tray) {
+          tray.displayBalloon({
+            title: 'Skys WiFi Cutter',
+            content: ok ? 'All cuts, lags, and blocks stopped.' : 'Panic stop failed — open the app.'
+          });
         }
       }
     },

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Smartphone, Wifi, WifiOff, Scissors, RotateCcw } from 'lucide-react';
+import { Smartphone, Wifi, WifiOff, Scissors, RotateCcw, ExternalLink, Copy, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch } from '../config/api';
 
@@ -14,31 +14,52 @@ interface RemoteStatus {
 
 export function RemoteControlPanel() {
   const [enabled, setEnabled] = useState(false);
-  const [pin, setPin] = useState('');
+  const [pinSet, setPinSet] = useState(false);
+  const [newPin, setNewPin] = useState('');
   const [inputPin, setInputPin] = useState('');
   const [status, setStatus] = useState<RemoteStatus | null>(null);
   const [targetMac, setTargetMac] = useState('');
   const [saving, setSaving] = useState(false);
+  const [pcIp, setPcIp] = useState('');
 
   useEffect(() => {
-    apiFetch<{ remoteControlEnabled: boolean; remotePin: string }>('/settings')
+    apiFetch<{ remoteControlEnabled: boolean; remotePinSet: boolean }>('/settings')
       .then((s) => {
         setEnabled(Boolean(s.remoteControlEnabled));
-        setPin(s.remotePin || '');
+        setPinSet(Boolean(s.remotePinSet));
       })
+      .catch(() => null);
+    apiFetch<{ network?: { ip?: string } }>('/health')
+      .then((h) => setPcIp(h.network?.ip || ''))
       .catch(() => null);
   }, []);
 
+  const remotePageUrl = pcIp ? `http://${pcIp}:3001/remote` : '';
+
+  const copyRemoteLink = async () => {
+    if (!remotePageUrl) {
+      toast.error('PC LAN IP not detected yet — wait for health check');
+      return;
+    }
+    await navigator.clipboard.writeText(remotePageUrl);
+    toast.success('Remote link copied');
+  };
+
   const saveSettings = async () => {
+    if (enabled && !pinSet && newPin.length < 4) {
+      toast.error('Set a PIN with 4+ digits');
+      return;
+    }
     setSaving(true);
     try {
-      await apiFetch('/settings', {
+      const body: Record<string, unknown> = { remoteControlEnabled: enabled };
+      if (newPin.length >= 4) body.remotePin = newPin;
+      const result = await apiFetch<{ remotePinSet: boolean }>('/settings', {
         method: 'PATCH',
-        body: JSON.stringify({
-          remoteControlEnabled: enabled,
-          remotePin: pin
-        })
+        body: JSON.stringify(body)
       });
+      setPinSet(Boolean(result.remotePinSet));
+      setNewPin('');
       toast.success(
         enabled
           ? 'Remote enabled — restart the app so phones on your LAN can connect'
@@ -120,11 +141,48 @@ export function RemoteControlPanel() {
         <h3 className="font-semibold text-slate-900 dark:text-white">Phone Remote Control</h3>
       </div>
       <p className="text-xs text-slate-500">
-        Off by default. Enable, set a PIN (4+ digits), save, then <strong>restart the app</strong>.
-        From another device on your LAN call{' '}
-        <code className="text-indigo-600">http://&lt;PC-IP&gt;:3001/api/remote/...</code> with header{' '}
-        <code className="text-indigo-600">X-Remote-Pin</code>. Cut/block APIs stay localhost-only.
+        Off by default. Enable, set a PIN (4+ digits), save, then <strong>restart the app</strong> so phones on
+        your LAN can connect.
       </p>
+
+      <div className="rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/60 p-3 text-xs text-amber-900 dark:text-amber-100 flex gap-2">
+        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+        <p>
+          <strong>Restart required:</strong> after enabling or changing remote settings, fully quit and relaunch
+          Skys WiFi Cutter (tray → Quit, then open again).
+        </p>
+      </div>
+
+      <div className="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+        <p className="text-xs font-medium text-slate-600 dark:text-slate-300">Phone URL (same WiFi/LAN)</p>
+        {pcIp ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="text-sm text-indigo-600 dark:text-indigo-400 font-mono break-all">{remotePageUrl}</code>
+            <button
+              onClick={copyRemoteLink}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs hover:bg-white dark:hover:bg-slate-800"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              Copy link
+            </button>
+            <a
+              href={remotePageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs hover:bg-white dark:hover:bg-slate-800"
+            >
+              Open
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500">Detecting PC LAN IP from health check…</p>
+        )}
+        <p className="text-[11px] text-slate-500">
+          PC IP: <span className="font-mono">{pcIp || '—'}</span> · API header{' '}
+          <code className="text-indigo-600">X-Remote-Pin</code>
+        </p>
+      </div>
 
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
@@ -133,9 +191,9 @@ export function RemoteControlPanel() {
       <div className="grid grid-cols-2 gap-2">
         <input
           type="password"
-          value={pin}
-          onChange={(e) => setPin(e.target.value)}
-          placeholder="Remote PIN (4+ digits)"
+          value={newPin}
+          onChange={(e) => setNewPin(e.target.value)}
+          placeholder={pinSet ? 'New PIN (leave blank to keep)' : 'Remote PIN (4+ digits)'}
           className="px-3 py-2 rounded-lg border dark:bg-slate-700 text-sm"
         />
         <button
@@ -146,6 +204,9 @@ export function RemoteControlPanel() {
           Save
         </button>
       </div>
+      {pinSet && (
+        <p className="text-xs text-emerald-600 dark:text-emerald-400">PIN is set (stored hashed, never shown)</p>
+      )}
 
       <hr className="border-slate-200 dark:border-slate-700" />
 

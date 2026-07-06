@@ -22,6 +22,9 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Device, DeviceBandwidth } from '../types/device';
+import { ConfirmModal } from './ConfirmModal';
+
+type PendingConfirm = 'kick' | 'oneWayStart' | 'oneWayStop' | 'firewallStart' | 'firewallStop' | null;
 
 type ControlMode = 'advance' | 'intermediate';
 
@@ -112,7 +115,7 @@ export function NetCutDevicePanel({
   device,
   bandwidth,
   isMetering,
-  meterSecondsLeft = 45,
+  meterSecondsLeft,
   isFavorite,
   isDnsBlocked,
   perDeviceActive,
@@ -147,6 +150,7 @@ export function NetCutDevicePanel({
   const [mode, setMode] = useState<ControlMode>('advance');
   const [cutting, setCutting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const isSelf = localMac === device.mac_address.toUpperCase();
   const isBlocked = device.status === 'blocked';
   const isOnline = device.is_online !== false;
@@ -183,6 +187,82 @@ export function NetCutDevicePanel({
       setCutting(false);
     }
   };
+
+  const runPendingConfirm = async () => {
+    try {
+      if (pendingConfirm === 'kick') {
+        await onKick?.();
+      } else if (pendingConfirm === 'oneWayStart' || pendingConfirm === 'oneWayStop') {
+        await onOneWayKill?.();
+      } else if (pendingConfirm === 'firewallStart' || pendingConfirm === 'firewallStop') {
+        await onFirewallKill?.();
+      }
+      setPendingConfirm(null);
+    } finally {
+      // ConfirmModal handles loading state
+    }
+  };
+
+  const confirmProps =
+    pendingConfirm === 'kick'
+      ? {
+          title: 'Kick device?',
+          message: (
+            <>
+              <p>
+                Send deauth / disconnect packets to <strong>{device.name}</strong> ({device.ip_address}).
+              </p>
+              <p className="text-xs text-slate-500 mt-2">The device may reconnect automatically.</p>
+            </>
+          ),
+          confirmLabel: 'Kick',
+          danger: true
+        }
+      : pendingConfirm === 'oneWayStart'
+        ? {
+            title: 'One-way kill — upload only',
+            message: (
+              <>
+                <p>
+                  Blocks <strong>upload traffic only</strong> from {device.name}. Downloads still work — useful
+                  for slowing uploads without a full cut.
+                </p>
+                <p className="text-xs text-slate-500 mt-2">Different from firewall kill which blocks ALL traffic.</p>
+              </>
+            ),
+            confirmLabel: 'Block upload',
+            danger: true
+          }
+        : pendingConfirm === 'oneWayStop'
+          ? {
+              title: 'Stop one-way kill?',
+              message: <p>Restore normal upload for {device.name}.</p>,
+              confirmLabel: 'Stop one-way kill'
+            }
+          : pendingConfirm === 'firewallStart'
+            ? {
+                title: 'Full firewall kill — ALL traffic',
+                message: (
+                  <>
+                    <p>
+                      Blocks <strong>all inbound and outbound traffic</strong> for {device.name} using Windows
+                      firewall rules.
+                    </p>
+                    <p className="text-xs text-slate-500 mt-2">
+                      Stronger than one-way kill (upload only) or ARP cut. Use when you need a hard block.
+                    </p>
+                  </>
+                ),
+                confirmLabel: 'Block all traffic',
+                danger: true
+              }
+            : pendingConfirm === 'firewallStop'
+              ? {
+                  title: 'Remove firewall kill?',
+                  message: <p>Remove firewall rules and restore network access for {device.name}.</p>,
+                  confirmLabel: 'Remove kill'
+                }
+              : null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
@@ -232,7 +312,9 @@ export function NetCutDevicePanel({
             <div className="grid grid-cols-6 gap-1.5">
               <IconBtn
                 title={isOneWayKill ? 'Stop one-way kill (upload blocked)' : 'One-way kill — block upload only'}
-                onClick={() => onOneWayKill?.()}
+                onClick={() =>
+                  setPendingConfirm(isOneWayKill ? 'oneWayStop' : 'oneWayStart')
+                }
                 active={isOneWayKill}
               >
                 <span className="text-[10px] font-bold">1WAY</span>
@@ -260,7 +342,9 @@ export function NetCutDevicePanel({
             <div className="grid grid-cols-6 gap-1.5">
               <IconBtn
                 title={isFirewallKill ? 'Remove full firewall kill' : 'Full firewall kill — block all traffic'}
-                onClick={() => onFirewallKill?.()}
+                onClick={() =>
+                  setPendingConfirm(isFirewallKill ? 'firewallStop' : 'firewallStart')
+                }
                 active={isFirewallKill}
               >
                 <ShieldBan className="w-4 h-4" />
@@ -300,7 +384,10 @@ export function NetCutDevicePanel({
               </button>
             )}
             {onKick && (
-              <button onClick={onKick} className="hover:underline flex items-center gap-1 text-red-400">
+              <button
+                onClick={() => setPendingConfirm('kick')}
+                className="hover:underline flex items-center gap-1 text-red-400"
+              >
                 <ZapOff className="w-3 h-3" />
                 Kick
               </button>
@@ -329,7 +416,7 @@ export function NetCutDevicePanel({
               <p className="text-lg font-bold">
                 {formatMbps(bandwidth?.upload, Boolean(bwActive))} Mbps
               </p>
-              {isMetering && (
+              {isMetering && meterSecondsLeft != null && meterSecondsLeft > 0 && (
                 <p className="text-[10px] text-amber-400">
                   Metering ~{meterSecondsLeft}s — browse/stream on device now
                 </p>
@@ -459,12 +546,27 @@ export function NetCutDevicePanel({
             <button onClick={onDnsBlock} className="py-2 rounded-lg text-xs font-semibold border border-cyan-500 text-cyan-300">
               DNS
             </button>
-            <button onClick={() => onOneWayKill?.()} className="py-2 rounded-lg text-xs font-semibold border border-orange-500 text-orange-300">
+            <button
+              onClick={() => setPendingConfirm(isOneWayKill ? 'oneWayStop' : 'oneWayStart')}
+              className="py-2 rounded-lg text-xs font-semibold border border-orange-500 text-orange-300"
+            >
               1-Way
             </button>
           </div>
         )}
       </div>
+
+      {confirmProps && (
+        <ConfirmModal
+          open={Boolean(pendingConfirm)}
+          title={confirmProps.title}
+          message={confirmProps.message}
+          confirmLabel={confirmProps.confirmLabel}
+          danger={confirmProps.danger}
+          onConfirm={runPendingConfirm}
+          onCancel={() => setPendingConfirm(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Device } from '../types/device';
 import { AlertTriangle, Shield, ShieldOff, X } from 'lucide-react';
+import { ConfirmModal } from './ConfirmModal';
 
 interface NewDeviceBannerProps {
   devices: Device[];
@@ -16,9 +18,18 @@ export function NewDeviceBanner({
   onDismiss,
   onDismissAll
 }: NewDeviceBannerProps) {
+  const [cutTarget, setCutTarget] = useState<Device | null>(null);
+
   if (devices.length === 0) return null;
 
+  const confirmCut = async () => {
+    if (!cutTarget) return;
+    await onBlock(cutTarget.mac_address);
+    setCutTarget(null);
+  };
+
   return (
+    <>
     <div className="mb-4 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-4 text-sm">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex gap-2 text-amber-900 dark:text-amber-100">
@@ -59,7 +70,7 @@ export function NewDeviceBanner({
                 Allow
               </button>
               <button
-                onClick={() => onBlock(device.mac_address)}
+                onClick={() => setCutTarget(device)}
                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium"
               >
                 <ShieldOff className="w-3.5 h-3.5" />
@@ -76,5 +87,27 @@ export function NewDeviceBanner({
         ))}
       </ul>
     </div>
+
+      <ConfirmModal
+        open={Boolean(cutTarget)}
+        title="Cut unknown device?"
+        danger
+        confirmLabel="Cut device"
+        message={
+          cutTarget ? (
+            <>
+              <p>
+                Cut <strong>{cutTarget.name}</strong> ({cutTarget.ip_address}) from the network?
+              </p>
+              <p className="text-xs text-slate-500 mt-2">
+                Only cut devices you do not recognize on a network you own.
+              </p>
+            </>
+          ) : null
+        }
+        onConfirm={confirmCut}
+        onCancel={() => setCutTarget(null)}
+      />
+    </>
   );
 }

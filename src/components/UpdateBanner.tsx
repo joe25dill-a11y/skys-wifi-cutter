@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { Download } from 'lucide-react';
 import { apiFetch } from '../config/api';
 
+const GITHUB_RELEASES = 'https://github.com/joe25dill-a11y/skys-wifi-cutter/releases';
+
 interface UpdateInfo {
   currentVersion: string;
   latestVersion?: string;
   updateAvailable?: boolean;
   releaseUrl?: string | null;
+  downloadUrl?: string | null;
   note?: string;
 }
 
@@ -23,7 +26,7 @@ export function UpdateBanner({ currentVersion }: { currentVersion?: string }) {
     return null;
   }
 
-  const href = info.releaseUrl || 'https://github.com/SkysWiFiCutter/skys-wifi-cutter/releases';
+  const href = info.downloadUrl || info.releaseUrl || GITHUB_RELEASES;
 
   return (
     <div className="mb-4 rounded-xl border border-sky-300 bg-sky-50 dark:bg-sky-950/30 dark:border-sky-800 p-4 flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -39,7 +42,7 @@ export function UpdateBanner({ currentVersion }: { currentVersion?: string }) {
         rel="noreferrer"
         className="px-3 py-1.5 rounded-lg bg-sky-600 text-white text-xs font-medium hover:bg-sky-500"
       >
-        Download update
+        {info.downloadUrl ? 'Download installer' : 'View release'}
       </a>
     </div>
   );

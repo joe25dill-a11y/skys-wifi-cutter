@@ -1,4 +1,4 @@
-# One-time GitHub setup + v4.4.0 release
+# One-time GitHub setup + release
 # Prerequisites: Git for Windows + GitHub CLI (gh)
 #   winget install Git.Git
 #   winget install GitHub.cli
@@ -30,7 +30,7 @@ if (-not $Owner) {
 
 $version = (Get-Content package.json | ConvertFrom-Json).version
 $tag = "v$version"
-$installerName = "Skys WiFi Cutter Setup $version.exe"
+$installerName = "Skys.WiFi.Cutter.Setup.exe"
 $installerLocal = Join-Path $env:LOCALAPPDATA "SkysWiFiCutterBuild\$installerName"
 
 if (-not $SkipBuild) {
@@ -81,14 +81,35 @@ Free LAN network manager — scan, cut, lag switch, bandwidth, hotspot control.
 - Use **only on networks you own**
 
 ### Issues?
-In the app: **Tools → Diagnostics → Copy feedback report**
+In the app: **Tools → Diagnostics → Copy feedback report**, then paste into a [GitHub issue](https://github.com/$Owner/$Repo/issues)
 "@
 
+$hash = (Get-FileHash $installerLocal -Algorithm SHA256).Hash.ToLower()
+$checksumName = "Skys-WiFi-Cutter-v$version-sha256.txt"
+$checksumPath = Join-Path $env:TEMP $checksumName
+@(
+  "Skys WiFi Cutter v$version SHA256 checksum",
+  "",
+  "File: $installerName",
+  "SHA256: $hash"
+) | Set-Content -Path $checksumPath -Encoding UTF8
+
+$websiteChecksum = Join-Path $Root "website\$checksumName"
+@(
+  "Skys WiFi Cutter v$version SHA256 checksum",
+  "",
+  "File: $installerName",
+  "SHA256: $hash"
+) | Set-Content -Path $websiteChecksum -Encoding UTF8
+Write-Host "Website checksum: $websiteChecksum"
+
+Write-Host "SHA256: $hash"
+
 if (gh release view $tag 2>$null) {
-  gh release upload $tag $installerLocal --clobber
+  gh release upload $tag $installerLocal $checksumPath --clobber
   Write-Host "Updated assets on existing release $tag"
 } else {
-  gh release create $tag $installerLocal --title "Skys WiFi Cutter v$version" --notes $notes
+  gh release create $tag $installerLocal $checksumPath --title "Skys WiFi Cutter v$version" --notes $notes --latest
 }
 
 Write-Host ""

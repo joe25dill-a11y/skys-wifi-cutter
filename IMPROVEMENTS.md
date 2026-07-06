@@ -1,3 +1,5 @@
+> **Legacy notice:** Much of this file describes v2.0 cloud/JWT work that is **not in the current app**. Skys WiFi Cutter v4.x is a **local-only desktop** LAN manager. See `PUBLIC_RELEASE.md` for what ships today.
+
 # Project Improvements Summary
 
 ## 🎉 Version 2.0.0 - Complete Security Overhaul

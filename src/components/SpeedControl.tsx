@@ -7,6 +7,7 @@ interface SpeedControlProps {
   device: Device;
   onClose: () => void;
   onApply: (mac: string, uploadKbps: number, downloadKbps: number) => Promise<void>;
+  onRemoveLimit?: (mac: string) => Promise<void>;
   isLimited?: boolean;
 }
 
@@ -14,6 +15,7 @@ export const SpeedControl: React.FC<SpeedControlProps> = ({
   device,
   onClose,
   onApply,
+  onRemoveLimit,
   isLimited = false
 }) => {
   const [uploadMbps, setUploadMbps] = useState(1);
@@ -26,9 +28,15 @@ export const SpeedControl: React.FC<SpeedControlProps> = ({
   const handleApply = async () => {
     setIsApplying(true);
     try {
-      const uploadKbps = isUnlimited ? 1_000_000 : toKbps(uploadMbps);
-      const downloadKbps = isUnlimited ? 1_000_000 : toKbps(downloadMbps);
-      await onApply(device.mac_address, uploadKbps, downloadKbps);
+      if (isUnlimited) {
+        if (onRemoveLimit) {
+          await onRemoveLimit(device.mac_address);
+        } else {
+          await onApply(device.mac_address, 0, 0);
+        }
+      } else {
+        await onApply(device.mac_address, toKbps(uploadMbps), toKbps(downloadMbps));
+      }
       onClose();
     } catch (error) {
       console.error('Error applying speed limit:', error);

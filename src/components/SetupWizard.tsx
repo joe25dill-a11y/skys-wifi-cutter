@@ -61,7 +61,7 @@ export function SetupWizard({ health, onComplete, onScan, onTestCut }: SetupWiza
     },
     {
       title: 'Scan your network',
-      body: 'Find every device on your WiFi or Ethernet. If something breaks later, Tools → Diagnostics → Copy feedback report and send it to the developer.',
+      body: 'Find every device on your WiFi or Ethernet. If something breaks later, use Tools → Diagnostics → Copy feedback report and paste it into a GitHub issue.',
       ok: false
     }
   ];
@@ -205,6 +205,14 @@ export function SetupWizard({ health, onComplete, onScan, onTestCut }: SetupWiza
           >
             Skip setup
           </button>
+          <a
+            href="https://github.com/joe25dill-a11y/skys-wifi-cutter/issues"
+            target="_blank"
+            rel="noreferrer"
+            className="block w-full mt-2 text-center text-xs text-indigo-400 hover:text-indigo-300"
+          >
+            Report a bug on GitHub
+          </a>
         </div>
       </div>
     </div>

@@ -38,6 +38,7 @@ import { UpdateBanner } from '../components/UpdateBanner';
 import { AlertsBanner } from '../components/AlertsBanner';
 import { NewDeviceBanner } from '../components/NewDeviceBanner';
 import { WhatsNewModal } from '../components/WhatsNewModal';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { SpeedControl } from '../components/SpeedControl';
 import { LagControl } from '../components/LagControl';
 import { SchedulePanel } from '../components/SchedulePanel';
@@ -125,6 +126,13 @@ export const DashboardPage: React.FC = () => {
   const [compactList, setCompactList] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [pendingNewDevices, setPendingNewDevices] = useState<Device[]>([]);
+  const [toolsPresetMac, setToolsPresetMac] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<
+    'cutAll' | 'restoreAll' | 'bulkCut' | 'bulkRestore' | null
+  >(null);
+  const [meterEndsAt, setMeterEndsAt] = useState<Record<string, number>>({});
+  const [, setMeterTick] = useState(0);
+  const lastBulkCutMacsRef = useRef<string[]>([]);
 
   const fetchDevices = async () => {
     const data = await apiFetch<Device[]>('/devices');
@@ -280,6 +288,14 @@ export const DashboardPage: React.FC = () => {
     await fetchHealth();
   };
 
+  const handleRemoveSpeedLimit = async (mac: string) => {
+    const result = await apiFetch<{ message?: string }>(`/devices/${encodeMac(mac)}/remove-speed-limit`, {
+      method: 'POST'
+    });
+    toast.success(result.message || 'Speed limit removed');
+    await fetchHealth();
+  };
+
   const handleLagControl = async (
     mac: string,
     outgoingMs: number,
@@ -330,14 +346,32 @@ export const DashboardPage: React.FC = () => {
       toast.error(health?.degradedReason || 'Run as Administrator to cut devices');
       return;
     }
-    if (!confirm('Cut ALL devices except this PC from the network?')) return;
     try {
       const result = await apiFetch<{ devices: Device[] }>('/devices/cut-all', { method: 'POST' });
       setDevices(result.devices);
       toast.success('All devices cut');
+      toast(
+        (t) => (
+          <span className="flex items-center gap-2 text-sm">
+            Cut all applied — undo?
+            <button
+              onClick={async () => {
+                toast.dismiss(t.id);
+                await handleRestoreAll();
+              }}
+              className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-bold"
+            >
+              Restore All
+            </button>
+          </span>
+        ),
+        { duration: 5000, icon: '⚠️' }
+      );
       await fetchHealth();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Cut all failed');
+    } finally {
+      setConfirmAction(null);
     }
   };
 
@@ -349,6 +383,8 @@ export const DashboardPage: React.FC = () => {
       await fetchHealth();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Restore all failed');
+    } finally {
+      setConfirmAction(null);
     }
   };
 
@@ -363,8 +399,14 @@ export const DashboardPage: React.FC = () => {
 
   const handleBulkCut = async () => {
     if (selectedMacs.size === 0) return;
-    if (!confirm(`Cut ${selectedMacs.size} selected device(s)?`)) return;
-    for (const mac of selectedMacs) {
+    if (!health?.checks?.cutReady) {
+      toast.error(health?.degradedReason || 'Run as Administrator to cut devices');
+      return;
+    }
+    const count = selectedMacs.size;
+    const macsToCut = [...selectedMacs];
+    lastBulkCutMacsRef.current = macsToCut;
+    for (const mac of macsToCut) {
       try {
         await handleToggleDevice(mac);
       } catch {
@@ -372,7 +414,38 @@ export const DashboardPage: React.FC = () => {
       }
     }
     setSelectedMacs(new Set());
-    toast.success('Bulk cut applied');
+    toast.success(`Cut ${count} selected device${count === 1 ? '' : 's'}`);
+    toast(
+      (t) => (
+        <span className="flex items-center gap-2 text-sm">
+          Bulk cut applied — undo?
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+              for (const mac of lastBulkCutMacsRef.current) {
+                const device = devices.find((d) => d.mac_address === mac);
+                if (device?.status === 'blocked') {
+                  try {
+                    await handleToggleDevice(mac);
+                  } catch {
+                    // continue
+                  }
+                }
+              }
+              lastBulkCutMacsRef.current = [];
+              toast.success('Bulk cut undone');
+              await fetchHealth();
+            }}
+            className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-bold"
+          >
+            Undo
+          </button>
+        </span>
+      ),
+      { duration: 5000, icon: '⚠️' }
+    );
+    await fetchHealth();
+    setConfirmAction(null);
   };
 
   const handleBulkRestore = async () => {
@@ -389,6 +462,8 @@ export const DashboardPage: React.FC = () => {
     }
     setSelectedMacs(new Set());
     toast.success('Bulk restore applied');
+    await fetchHealth();
+    setConfirmAction(null);
   };
 
   const toggleAutoRefresh = () => {
@@ -470,6 +545,16 @@ export const DashboardPage: React.FC = () => {
   const oneWayMacs = new Set((health?.oneWayKills ?? []).map((k) => k.mac.toUpperCase()));
   const firewallMacs = new Set((health?.firewallKills ?? []).map((k) => k.mac.toUpperCase()));
   const cutReady = health?.checks?.cutReady ?? false;
+  const cutTargetCount = devices.filter((d) => d.mac_address.toUpperCase() !== localMac).length;
+
+  const selectedMeterSecondsLeft =
+    selectedDevice && meteringMacs.has(selectedDevice.mac_address.toUpperCase())
+      ? (() => {
+          const endsAt = meterEndsAt[selectedDevice.mac_address.toUpperCase()];
+          if (!endsAt) return undefined;
+          return Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+        })()
+      : undefined;
 
   const handleToggleFavorite = async (mac: string, favorite: boolean) => {
     const updated = await apiFetch<Device>(`/devices/${encodeMac(mac)}/favorite`, {
@@ -606,8 +691,24 @@ export const DashboardPage: React.FC = () => {
       method: 'POST',
       body: JSON.stringify({ seconds: 45 })
     });
-    await fetchBandwidth();
+    const data = await apiFetch<BandwidthResponse>('/bandwidth');
+    setBandwidth(data);
+    const endsAt = Date.now() + 45_000;
+    setMeterEndsAt((prev) => {
+      const next = { ...prev };
+      (data.meteringMacs ?? []).forEach((m) => {
+        next[m.toUpperCase()] = endsAt;
+      });
+      return next;
+    });
     toast.success(result.message || `Metering ${result.count ?? 0} device(s)`);
+  };
+
+  const noteMeterEndsAt = (mac: string, secondsLeft: number) => {
+    setMeterEndsAt((prev) => ({
+      ...prev,
+      [mac.toUpperCase()]: Date.now() + secondsLeft * 1000
+    }));
   };
 
   const handleRefreshDeviceBandwidth = async (mac: string) => {
@@ -630,6 +731,9 @@ export const DashboardPage: React.FC = () => {
       }
     }
     await fetchBandwidth();
+    if (result.metering && result.secondsLeft) {
+      noteMeterEndsAt(mac, result.secondsLeft);
+    }
     if (result.metering) {
       toast.success(
         result.message ||
@@ -666,6 +770,34 @@ export const DashboardPage: React.FC = () => {
   };
 
   const filteredDevices = sortDevicesList(filterDevices(devices), deviceSort, bandwidth?.devices);
+  const meteringMacKey = (bandwidth?.meteringMacs ?? []).map((m) => m.toUpperCase()).sort().join(',');
+
+  useEffect(() => {
+    if (Object.keys(meterEndsAt).length === 0) return;
+    const interval = setInterval(() => setMeterTick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [meterEndsAt]);
+
+  useEffect(() => {
+    const activeMacs = new Set((bandwidth?.meteringMacs ?? []).map((m) => m.toUpperCase()));
+    setMeterEndsAt((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const mac of Object.keys(next)) {
+        if (!activeMacs.has(mac)) {
+          delete next[mac];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [meteringMacKey]);
+
+  useEffect(() => {
+    if (selectedDevice) {
+      setToolsPresetMac(selectedDevice.mac_address);
+    }
+  }, [selectedDevice?.mac_address]);
 
   useEffect(() => {
     if (!selectedDevice || localMac === selectedDevice.mac_address.toUpperCase()) return;
@@ -717,7 +849,7 @@ export const DashboardPage: React.FC = () => {
           device={selectedDevice}
           bandwidth={bandwidth?.devices?.find((d) => d.mac === selectedDevice.mac_address)}
           isMetering={meteringMacs.has(selectedDevice.mac_address.toUpperCase())}
-          meterSecondsLeft={45}
+          meterSecondsLeft={selectedMeterSecondsLeft}
           perDeviceActive={bandwidth?.perDevice}
           isLimited={limitedMacs.has(selectedDevice.mac_address)}
           isLagActive={lagMacs.has(selectedDevice.mac_address)}
@@ -785,6 +917,7 @@ export const DashboardPage: React.FC = () => {
           device={panelSpeedDevice}
           onClose={() => setPanelSpeedDevice(null)}
           onApply={handleLimitSpeed}
+          onRemoveLimit={handleRemoveSpeedLimit}
           isLimited={limitedMacs.has(panelSpeedDevice.mac_address)}
         />
       )}
@@ -1049,15 +1182,21 @@ export const DashboardPage: React.FC = () => {
                     Export
                   </button>
                   <button
-                    onClick={handleCutAll}
-                    disabled={!cutReady}
+                    onClick={() => {
+                      if (!cutReady) {
+                        toast.error(health?.degradedReason || 'Run as Administrator to cut devices');
+                        return;
+                      }
+                      setConfirmAction('cutAll');
+                    }}
+                    disabled={!cutReady || cutTargetCount === 0}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-red-600 text-white disabled:opacity-40"
                   >
                     <Scissors className="w-4 h-4" />
                     Cut All
                   </button>
                   <button
-                    onClick={handleRestoreAll}
+                    onClick={() => setConfirmAction('restoreAll')}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-emerald-600 text-white"
                   >
                     <RotateCcw className="w-4 h-4" />
@@ -1088,13 +1227,13 @@ export const DashboardPage: React.FC = () => {
                 <div className="mx-4 mb-2 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-sm">
                   <span className="font-medium">{selectedMacs.size} selected</span>
                   <button
-                    onClick={handleBulkCut}
+                    onClick={() => setConfirmAction('bulkCut')}
                     className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-bold"
                   >
                     Cut selected
                   </button>
                   <button
-                    onClick={handleBulkRestore}
+                    onClick={() => setConfirmAction('bulkRestore')}
                     className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold"
                   >
                     Restore selected
@@ -1180,9 +1319,71 @@ export const DashboardPage: React.FC = () => {
         {tab === 'wifi' && <WiFiAnalyzer />}
 
         {tab === 'tools' && (
-          <ToolsPanel devices={devices} health={health} onDevicesChange={setDevices} />
+          <ToolsPanel
+            devices={devices}
+            health={health}
+            onDevicesChange={setDevices}
+            selectedDeviceMac={toolsPresetMac ?? selectedDevice?.mac_address ?? null}
+            onSelectedDeviceMacChange={setToolsPresetMac}
+            onHealthRefresh={fetchHealth}
+          />
         )}
       </main>
+
+      <ConfirmModal
+        open={confirmAction === 'cutAll'}
+        title="Cut all devices?"
+        danger
+        requireText="CUT"
+        confirmLabel="Cut all"
+        message={
+          <>
+            <p>
+              Cut <strong>{cutTargetCount}</strong> device{cutTargetCount === 1 ? '' : 's'} from the network
+              (your PC is excluded).
+            </p>
+            <p className="text-xs text-slate-500 mt-2">You can undo within 5 seconds after confirming.</p>
+          </>
+        }
+        onConfirm={handleCutAll}
+        onCancel={() => setConfirmAction(null)}
+      />
+      <ConfirmModal
+        open={confirmAction === 'restoreAll'}
+        title="Restore all devices?"
+        confirmLabel="Restore all"
+        message={<p>Restore internet access for every device currently cut on this network?</p>}
+        onConfirm={handleRestoreAll}
+        onCancel={() => setConfirmAction(null)}
+      />
+      <ConfirmModal
+        open={confirmAction === 'bulkCut'}
+        title="Cut selected devices?"
+        danger
+        requireText="CUT"
+        confirmLabel="Cut selected"
+        message={
+          <p>
+            Cut <strong>{selectedMacs.size}</strong> selected device{selectedMacs.size === 1 ? '' : 's'}{' '}
+            from the network?
+          </p>
+        }
+        onConfirm={handleBulkCut}
+        onCancel={() => setConfirmAction(null)}
+      />
+      <ConfirmModal
+        open={confirmAction === 'bulkRestore'}
+        title="Restore selected devices?"
+        confirmLabel="Restore selected"
+        message={
+          <p>
+            Restore internet access for the <strong>{selectedMacs.size}</strong> selected device
+            {selectedMacs.size === 1 ? '' : 's'} that are currently cut?
+          </p>
+        }
+        onConfirm={handleBulkRestore}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 };

@@ -1,11 +1,14 @@
 import logger from '../utils/logger.js';
 import { getSchedules } from '../storage/scheduleStore.js';
+import { getGroups } from '../storage/deviceGroupsStore.js';
 import { deviceStore } from '../storage/deviceStore.js';
 import { deviceController } from './deviceController.js';
+import { lagController } from './lagController.js';
 import { dnsHijack } from './dnsHijack.js';
 import { portBlocker } from './portBlocker.js';
 import { firewallKill } from './firewallKill.js';
 import { logAudit } from '../storage/auditLogStore.js';
+import { normalizeMac } from './arpTable.js';
 
 export class RuleScheduler {
   constructor() {
@@ -45,14 +48,38 @@ export class RuleScheduler {
   async tick() {
     const rules = await getSchedules();
     const devices = await deviceStore.getAll();
+    const groups = await getGroups();
 
     for (const rule of rules) {
       if (!this.shouldRunNow(rule)) continue;
 
-      const device = devices.find((d) => d.mac_address === rule.mac);
-      if (!device) continue;
-
       try {
+        if (rule.action === 'group_cut' || rule.action === 'group_restore') {
+          const group = groups.find((g) => g.id === rule.groupId);
+          if (!group) continue;
+          let count = 0;
+          for (const mac of group.macs) {
+            const device = devices.find((d) => normalizeMac(d.mac_address) === normalizeMac(mac));
+            if (!device) continue;
+            if (rule.action === 'group_cut') {
+              await deviceController.blockDevice(device.mac_address, device.ip_address);
+              await deviceStore.updateStatus(device.mac_address, 'blocked');
+            } else {
+              await deviceController.unblockDevice(device.mac_address, device.ip_address);
+              await deviceStore.updateStatus(device.mac_address, 'allowed');
+            }
+            count += 1;
+          }
+          logAudit(rule.action === 'group_cut' ? 'schedule_group_cut' : 'schedule_group_restore', {
+            detail: { groupId: group.id, count }
+          });
+          logger.info(`Schedule ${rule.action} ${group.name} (${count})`);
+          continue;
+        }
+
+        const device = devices.find((d) => d.mac_address === rule.mac);
+        if (!device) continue;
+
         if (rule.action === 'cut') {
           await deviceController.blockDevice(device.mac_address, device.ip_address);
           await deviceStore.updateStatus(device.mac_address, 'blocked');
@@ -63,6 +90,15 @@ export class RuleScheduler {
           await deviceStore.updateStatus(device.mac_address, 'allowed');
           logAudit('schedule_restore', { mac: device.mac_address, ip: device.ip_address });
           logger.info(`Schedule restore ${device.name}`);
+        } else if (rule.action === 'lag') {
+          const lagMs = Number(rule.lagMs) || 150;
+          await lagController.applyLag(device.mac_address, device.ip_address, lagMs, lagMs);
+          logAudit('schedule_lag', {
+            mac: device.mac_address,
+            ip: device.ip_address,
+            detail: { lagMs }
+          });
+          logger.info(`Schedule lag ${device.name} (${lagMs}ms)`);
         } else if (rule.action === 'limit' && rule.uploadKbps && rule.downloadKbps) {
           await deviceController.limitDeviceBandwidth(
             device.mac_address,

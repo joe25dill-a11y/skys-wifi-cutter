@@ -4,6 +4,34 @@ import { Sparkles, X } from 'lucide-react';
 const VERSION_KEY = 'skys-last-seen-version';
 
 const HIGHLIGHTS: Record<string, string[]> = {
+  '4.7.0': [
+    'Accident-proof confirms — Cut All requires typing CUT; kick, firewall kill, and new-device cut ask first',
+    '5-second undo toast after Cut All with Restore All',
+    'Speed limit remove uses proper API (not fake unlimited Mbps)',
+    'Schedule edit + next-run hints; group rename; defense/remote status chips',
+    'Remote panel shows PC IP + copy link; tray Restore All & Panic Stop'
+  ],
+  '4.6.1': [
+    'Game presets — device picker, active block badge, remove block, confirm before apply',
+    'Optional lag mode on game presets (instead of port block)',
+    'Update checker finds newest release when GitHub /latest skips prereleases',
+    'Clearer API errors when cut, lag, or port block conflict',
+    'Download page install steps + SmartScreen guidance'
+  ],
+  '4.6.0': [
+    'Mobile remote page — open http://<PC-IP>:3001/remote from your phone',
+    'Remote PIN stored hashed (scrypt) — never shown after save',
+    'Gateway MAC drift alerts when router ARP may be spoofed',
+    'Cut troubleshooting wizard — AP isolation and subnet self-test',
+    'Schedules support lag and group cut/restore; rules have configurable lagMs'
+  ],
+  '4.5.0': [
+    'Device groups — assign MACs and cut/restore whole groups',
+    'Full schedule panel — all action types, day picker, enable/disable',
+    'Update banner links directly to the latest installer download',
+    'Report bugs via GitHub Issues from Diagnostics and setup wizard',
+    'Remote PIN rate limiting after failed attempts'
+  ],
   '4.4.0': [
     'Stronger hotspot passwords (auto-generated, no weak defaults)',
     'Copy feedback report in Tools → Diagnostics for bug reports',

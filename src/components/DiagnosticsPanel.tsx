@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Activity, AlertTriangle, ClipboardCopy, RefreshCw, ShieldOff } from 'lucide-react';
+import { Activity, AlertTriangle, ClipboardCopy, ExternalLink, RefreshCw, ShieldOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch, API_BASE_URL } from '../config/api';
+import { ConfirmModal } from './ConfirmModal';
 
 interface DiagnosticsData {
   checks?: {
@@ -28,10 +29,13 @@ interface DiagnosticsData {
   uptimeSec?: number;
 }
 
+const GITHUB_ISSUES = 'https://github.com/joe25dill-a11y/skys-wifi-cutter/issues';
+
 export function DiagnosticsPanel() {
   const [data, setData] = useState<DiagnosticsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [panicLoading, setPanicLoading] = useState(false);
+  const [showPanicConfirm, setShowPanicConfirm] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,11 +58,11 @@ export function DiagnosticsPanel() {
   }, [load]);
 
   const panic = async () => {
-    if (!confirm('Stop ALL cuts, lags, DNS/port blocks, hotspot freeze, and WinDivert?')) return;
     setPanicLoading(true);
     try {
       const result = await apiFetch<{ message?: string }>('/diagnostics/panic', { method: 'POST' });
       toast.success(result.message || 'Everything stopped');
+      setShowPanicConfirm(false);
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Panic stop failed');
@@ -67,13 +71,25 @@ export function DiagnosticsPanel() {
     }
   };
 
+  const panicItems = [
+    data?.activeCuts ? `${data.activeCuts} ARP cut(s)` : null,
+    data?.lagSwitches ? `${data.lagSwitches} lag switch(es)` : null,
+    data?.dnsBlocks ? `${data.dnsBlocks} DNS block(s)` : null,
+    data?.portBlocks ? `${data.portBlocks} port block(s)` : null,
+    data?.hotspot?.isTrafficBlocked ? 'Hotspot traffic freeze' : null,
+    data?.hotspot?.windivert?.blockActive ? 'WinDivert block' : null,
+    data?.hotspot?.windivert?.lagActive ? 'WinDivert lag' : null,
+    data?.hotspot?.constantLagEngine ? 'Hotspot constant lag' : null,
+    data?.hotspot?.gamingModeActive ? 'Hotspot gaming mode' : null
+  ].filter(Boolean) as string[];
+
   const copyReport = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/diagnostics/report`);
       if (!response.ok) throw new Error('Could not build report');
       const text = await response.text();
       await navigator.clipboard.writeText(text);
-      toast.success('Feedback report copied — paste it in chat/email');
+      toast.success('Feedback report copied — paste it into a GitHub issue');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Copy failed');
     }
@@ -104,8 +120,17 @@ export function DiagnosticsPanel() {
             <ClipboardCopy className="w-3.5 h-3.5" />
             Copy feedback report
           </button>
+          <a
+            href={GITHUB_ISSUES}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs hover:bg-slate-50 dark:hover:bg-slate-700"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Report bug on GitHub
+          </a>
           <button
-            onClick={panic}
+            onClick={() => setShowPanicConfirm(true)}
             disabled={panicLoading}
             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-500 disabled:opacity-50"
           >
@@ -160,6 +185,28 @@ export function DiagnosticsPanel() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={showPanicConfirm}
+        title="Panic stop — stop everything?"
+        danger
+        confirmLabel="Stop all"
+        message={
+          <>
+            <p>This will immediately stop all active network controls:</p>
+            {panicItems.length > 0 ? (
+              <ul className="list-disc pl-5 mt-2 space-y-0.5 text-slate-600 dark:text-slate-300">
+                {panicItems.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-slate-500 mt-2">No active cuts or blocks detected — safe to run anyway.</p>
+            )}
+          </>
+        }
+        onConfirm={panic}
+        onCancel={() => setShowPanicConfirm(false)}
+      />
     </div>
   );
 }

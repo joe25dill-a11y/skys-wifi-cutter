@@ -3,6 +3,7 @@ import { Shield, ShieldOff, Scissors, RotateCcw, Check, X, Download, Upload } fr
 import toast from 'react-hot-toast';
 import { apiFetch } from '../config/api';
 import { Device, HealthResponse } from '../types/device';
+import { ConfirmModal } from './ConfirmModal';
 import { SchedulePanel } from './SchedulePanel';
 import { GroupsPanel } from './GroupsPanel';
 import { AuditLogPanel } from './AuditLogPanel';
@@ -12,11 +13,15 @@ import { RulesPanel } from './RulesPanel';
 import { GamePresetsPanel } from './GamePresetsPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
+import { CutTroubleshootingPanel } from './CutTroubleshootingPanel';
 
 interface ToolsPanelProps {
   devices: Device[];
   health: HealthResponse | null;
   onDevicesChange: (devices: Device[]) => void;
+  selectedDeviceMac?: string | null;
+  onSelectedDeviceMacChange?: (mac: string) => void;
+  onHealthRefresh?: () => void;
 }
 
 const FEATURES = [
@@ -34,9 +39,20 @@ const FEATURES = [
   { name: 'Subscription fee', netcut: '$', arcai: '$', us: 'FREE' }
 ];
 
-export function ToolsPanel({ devices, health, onDevicesChange }: ToolsPanelProps) {
+export function ToolsPanel({
+  devices,
+  health,
+  onDevicesChange,
+  selectedDeviceMac,
+  onSelectedDeviceMacChange,
+  onHealthRefresh
+}: ToolsPanelProps) {
   const [defenseActive, setDefenseActive] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'cutAll' | 'restoreAll' | null>(null);
+
+  const localMac = health?.network?.mac?.toUpperCase();
+  const cutTargetCount = devices.filter((d) => d.mac_address.toUpperCase() !== localMac).length;
 
   useEffect(() => {
     apiFetch<{ isActive: boolean }>('/defense/status')
@@ -64,7 +80,8 @@ export function ToolsPanel({ devices, health, onDevicesChange }: ToolsPanelProps
   };
 
   const cutAll = async () => {
-    if (!confirm(`Cut ALL ${devices.length} devices from the network? (Your PC is excluded)`)) {
+    if (!health?.checks?.cutReady) {
+      toast.error(health?.degradedReason || 'Run as Administrator to cut devices');
       return;
     }
     setLoading(true);
@@ -73,11 +90,29 @@ export function ToolsPanel({ devices, health, onDevicesChange }: ToolsPanelProps
         method: 'POST'
       });
       onDevicesChange(result.devices);
-      toast.success(result.message);
+      toast.success(result.message || 'All devices cut');
+      toast(
+        (t) => (
+          <span className="flex items-center gap-2 text-sm">
+            Cut all applied — undo?
+            <button
+              onClick={async () => {
+                toast.dismiss(t.id);
+                await restoreAll();
+              }}
+              className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-bold"
+            >
+              Restore All
+            </button>
+          </span>
+        ),
+        { duration: 5000, icon: '⚠️' }
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Cut all failed');
     } finally {
       setLoading(false);
+      setConfirmAction(null);
     }
   };
 
@@ -88,11 +123,12 @@ export function ToolsPanel({ devices, health, onDevicesChange }: ToolsPanelProps
         method: 'POST'
       });
       onDevicesChange(result.devices);
-      toast.success(result.message);
+      toast.success(result.message || 'All devices restored');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Restore all failed');
     } finally {
       setLoading(false);
+      setConfirmAction(null);
     }
   };
 
@@ -134,19 +170,29 @@ export function ToolsPanel({ devices, health, onDevicesChange }: ToolsPanelProps
     input.click();
   };
 
+  const presetDevice =
+    devices.find((d) => d.mac_address === selectedDeviceMac) ||
+    devices.find((d) => d.device_type === 'console') ||
+    devices[0] ||
+    null;
+  const presetPortBlock =
+    health?.portBlocks?.find(
+      (b) => b.mac.toUpperCase() === presetDevice?.mac_address.toUpperCase()
+    ) ?? null;
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <button
-          onClick={cutAll}
-          disabled={loading || devices.length === 0}
+          onClick={() => setConfirmAction('cutAll')}
+          disabled={loading || cutTargetCount === 0}
           className="flex items-center justify-center gap-2 py-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl font-bold text-lg"
         >
           <Scissors className="w-5 h-5" />
           Cut All Devices
         </button>
         <button
-          onClick={restoreAll}
+          onClick={() => setConfirmAction('restoreAll')}
           disabled={loading}
           className="flex items-center justify-center gap-2 py-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl font-bold text-lg"
         >
@@ -230,6 +276,8 @@ export function ToolsPanel({ devices, health, onDevicesChange }: ToolsPanelProps
         <DiagnosticsPanel />
       </div>
 
+      <CutTroubleshootingPanel />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <GroupsPanel devices={devices} onDevicesChange={onDevicesChange} />
         <div className="space-y-4">
@@ -246,7 +294,13 @@ export function ToolsPanel({ devices, health, onDevicesChange }: ToolsPanelProps
         <RulesPanel devices={devices} />
       </div>
 
-      <GamePresetsPanel device={devices.find((d) => d.device_type === 'console') || devices[0] || null} />
+      <GamePresetsPanel
+        devices={devices}
+        device={presetDevice}
+        onDeviceChange={(mac) => onSelectedDeviceMacChange?.(mac)}
+        portBlock={presetPortBlock}
+        onPortBlockChange={onHealthRefresh}
+      />
 
       <div className="flex flex-wrap gap-3">
         <button
@@ -266,6 +320,35 @@ export function ToolsPanel({ devices, health, onDevicesChange }: ToolsPanelProps
       </div>
 
       <SchedulePanel devices={devices} />
+
+      <ConfirmModal
+        open={confirmAction === 'cutAll'}
+        title="Cut all devices?"
+        danger
+        requireText="CUT"
+        confirmLabel="Cut all"
+        message={
+          <>
+            <p>
+              Cut <strong>{cutTargetCount}</strong> device{cutTargetCount === 1 ? '' : 's'} from the network
+              (your PC is excluded).
+            </p>
+            <p className="text-xs text-slate-500 mt-2">You can undo within 5 seconds after confirming.</p>
+          </>
+        }
+        onConfirm={cutAll}
+        onCancel={() => setConfirmAction(null)}
+      />
+      <ConfirmModal
+        open={confirmAction === 'restoreAll'}
+        title="Restore all devices?"
+        confirmLabel="Restore all"
+        message={
+          <p>Restore internet access for every device currently cut on this network?</p>
+        }
+        onConfirm={restoreAll}
+        onCancel={() => setConfirmAction(null)}
+      />
 
       {health && (
         <div className="text-xs text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-900 rounded-lg p-3">

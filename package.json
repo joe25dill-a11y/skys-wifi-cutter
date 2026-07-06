@@ -1,7 +1,7 @@
 {
   "name": "skys-wifi-cutter",
   "private": true,
-  "version": "4.4.0",
+  "version": "4.7.0",
   "description": "Skys WiFi Cutter — free LAN network manager",
   "author": "Skys WiFi Cutter",
   "type": "module",
@@ -116,6 +116,7 @@
       "node_modules/systeminformation/**/*",
       "node_modules/better-sqlite3/**/*"
     ],
+    "artifactName": "Skys.WiFi.Cutter.Setup.${ext}",
     "win": {
       "icon": "public/icon.ico",
       "target": [
@@ -133,7 +134,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "Skys WiFi Cutter",
-      "runAfterFinish": false,
+      "runAfterFinish": true,
       "include": "build/installer.nsh"
     }
   }

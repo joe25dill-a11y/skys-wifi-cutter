@@ -1,3 +1,5 @@
+> **Legacy notice:** Steps referencing Supabase, JWT, and `.env` cloud credentials are **outdated**. The app runs locally (Electron + Express on `127.0.0.1`). Use `npm run desktop` or the Windows installer — see `PUBLIC_RELEASE.md`.
+
 # Quick Start Guide - FREE Network Manager
 
 Get up and running in under 5 minutes!

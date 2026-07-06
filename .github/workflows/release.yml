@@ -27,15 +27,33 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create GitHub Release with installer
+      - name: Create GitHub Release with installer and checksum
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $version = (Get-Content package.json | ConvertFrom-Json).version
           $tag = "v$version"
-          $installer = "$env:LOCALAPPDATA\SkysWiFiCutterBuild\Skys WiFi Cutter Setup $version.exe"
+          $installer = "$env:LOCALAPPDATA\SkysWiFiCutterBuild\Skys.WiFi.Cutter.Setup.exe"
           if (-not (Test-Path $installer)) { throw "Installer not found: $installer" }
-          gh release create $tag $installer `
-            --title "Skys WiFi Cutter v$version" `
-            --notes "Windows beta installer. Run as Administrator. SmartScreen may warn (unsigned)."
+
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
+          $checksumName = "Skys-WiFi-Cutter-v$version-sha256.txt"
+          $checksumPath = Join-Path $env:RUNNER_TEMP $checksumName
+          @(
+            "Skys WiFi Cutter v$version SHA256 checksum",
+            "",
+            "File: Skys.WiFi.Cutter.Setup.exe",
+            "SHA256: $hash"
+          ) | Set-Content -Path $checksumPath -Encoding UTF8
+
+          Write-Host "SHA256: $hash"
+
+          if (gh release view $tag 2>$null) {
+            gh release upload $tag $installer $checksumPath --clobber
+            Write-Host "Updated assets on existing release $tag"
+          } else {
+            gh release create $tag $installer $checksumPath `
+              --title "Skys WiFi Cutter v$version" `
+              --notes "Windows beta installer. Run as Administrator. SmartScreen may warn (unsigned)."
+          }

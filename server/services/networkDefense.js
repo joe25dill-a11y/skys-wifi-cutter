@@ -4,6 +4,10 @@ import logger from '../utils/logger.js';
 
 const execAsync = promisify(exec);
 
+let driftTimer = null;
+let baselineGatewayMac = null;
+let driftAlerts = [];
+
 export class NetworkDefense {
   constructor() {
     this.isActive = false;
@@ -111,3 +115,45 @@ export class NetworkDefense {
 }
 
 export const networkDefense = new NetworkDefense();
+
+export function startGatewayDriftMonitor() {
+  if (driftTimer) return;
+  driftTimer = setInterval(() => {
+    networkDefense
+      .resolveGateway()
+      .then(() => {
+        const current = networkDefense.gatewayMac;
+        if (!current) return;
+        if (!baselineGatewayMac) {
+          baselineGatewayMac = current;
+          return;
+        }
+        if (baselineGatewayMac !== current) {
+          driftAlerts = [
+            {
+              type: 'gateway_drift',
+              message: 'Gateway MAC changed — possible ARP attack on your PC',
+              previousMac: baselineGatewayMac,
+              currentMac: current
+            }
+          ];
+          logger.warn(`Gateway MAC drift detected: ${baselineGatewayMac} -> ${current}`);
+          baselineGatewayMac = current;
+        }
+      })
+      .catch((err) => {
+        logger.debug(`Gateway drift check failed: ${err.message}`);
+      });
+  }, 30_000);
+}
+
+export function getGatewayDriftAlerts() {
+  return driftAlerts;
+}
+
+export function stopGatewayDriftMonitor() {
+  if (driftTimer) {
+    clearInterval(driftTimer);
+    driftTimer = null;
+  }
+}

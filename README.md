@@ -2,7 +2,7 @@
 
 ### Free LAN network manager (NetCut / Arcai-style) for Windows
 
-![Version](https://img.shields.io/badge/version-4.3.5-blue.svg) ![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Version](https://img.shields.io/badge/version-4.7.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 Desktop app for managing **your own** WiFi/LAN: device scan, ARP cut, lag switch, hotspot freeze, bandwidth monitor, port/DNS blocks, and more. Uses **Npcap** (LAN) + **WinDivert** (hotspot packet control) — no cloud, no subscription.
 
@@ -36,7 +36,7 @@ Desktop app for managing **your own** WiFi/LAN: device scan, ARP cut, lag switch
 
 ## Beta testers (Windows installer)
 
-Share **`Skys WiFi Cutter Setup.exe`** (v4.4.0). Host using **`website/download.html`** — see **`PUBLIC_RELEASE.md`** for the full checklist.
+Share **`Skys WiFi Cutter Setup.exe`** (v4.7.0). Host using **`website/download.html`** — see **`PUBLIC_RELEASE.md`** for the full checklist.
 
 1. Windows 10/11, **x64 only**
 2. Right-click installer → **Run as administrator** (SmartScreen may warn — unsigned build)
@@ -46,7 +46,7 @@ Share **`Skys WiFi Cutter Setup.exe`** (v4.4.0). Host using **`website/download.
 
 **Expect to work:** device scan, cut/restore, lag, speed limit, bandwidth, hotspot start/stop, freeze clients, settings, diagnostics.
 
-**Known limits:** unsigned installer (SmartScreen), no auto-update download yet, hotspot needs a Wi‑Fi adapter that supports Mobile Hotspot, some routers resist ARP cut, X closes to tray (hotspot stays until Stop/Quit).
+**Known limits:** unsigned installer (SmartScreen), no silent auto-update (manual download from banner), hotspot needs a Wi‑Fi adapter that supports Mobile Hotspot, some routers resist ARP cut, X closes to tray (hotspot stays until Stop/Quit).
 
 **API safety:** cut/block APIs bind to **localhost only**. Remote phone control is **off** until enabled in Tools → Remote (PIN + restart).
 
@@ -120,78 +120,47 @@ cd project
 npm install
 ```
 
-### 2. Configure Environment
+### 2. Configure Environment (optional)
 
 ```bash
 cp .env.example .env
-# Edit .env with your Supabase credentials
 ```
 
-Required in `.env`:
+Default settings work for local desktop use. Optional in `.env`:
+
 ```env
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-VITE_API_URL=http://localhost:3001
 PORT=3001
-JWT_SECRET=generate_secure_random_32_chars
 CORS_ORIGIN=http://localhost:5173
+NODE_ENV=development
 ```
 
-### 3. Generate Secure JWT Secret
-
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-Add the output to your `.env` file as `JWT_SECRET`.
-
-### 4. Database Setup
-
-Apply migrations from `supabase/migrations/` to your Supabase project.
-
-**Default Login:** `admin` / `admin123` (⚠️ CHANGE IMMEDIATELY!)
-
-### 5. Create Logs Directory
+### 3. Create Logs Directory
 
 ```bash
 mkdir logs
 ```
 
-## 🔒 Security Features (NEW in v2.0.0)
+Data (devices, settings, audit log) is stored locally in SQLite/JSON under the app data folder — **no Supabase or cloud database required**.
 
-This application now includes enterprise-grade security:
+## Security (desktop app)
 
-✅ **Authentication & Authorization**
-- JWT-based authentication with 24-hour expiration
-- BCrypt password hashing (never plaintext)
-- Rate limiting (5 login attempts per 15 minutes)
-- Protected endpoints require authentication
+This is a **local-only** desktop app — no login, no cloud account, no JWT auth layer.
 
-✅ **Input Validation & Sanitization**
-- All inputs validated before processing
-- Command injection prevention
-- SQL injection protection
-- XSS protection
+✅ **Local API**
+- Cut/block APIs bind to **localhost** by default
+- Remote phone control is **opt-in** with PIN (Tools → Remote)
+- Failed remote PIN attempts are rate-limited
 
-✅ **API Security**
+✅ **Input Validation**
+- MAC/IP validation on all device endpoints
 - Helmet.js security headers
-- CORS properly configured for specific origins
-- Rate limiting (100 requests per 15 minutes)
-- Comprehensive error handling
+- Rate limiting on API requests
 
-✅ **Database Security**
-- Row Level Security (RLS) enabled
-- Service role authentication required
-- Foreign key constraints
-- Passwords hashed with pgcrypto
+✅ **Privacy**
+- No telemetry, no subscriptions
+- All data stays on your PC (local SQLite/JSON)
 
-✅ **Logging & Monitoring**
-- Winston-based logging system
-- Request logging with IP tracking
-- Failed authentication attempt logging
-- Automatic log rotation
-
-📖 **Complete security documentation:** [README_SECURITY.md](./README_SECURITY.md)
+📖 **Legacy cloud docs:** [README_SECURITY.md](./README_SECURITY.md) describes an older Supabase/JWT design — **not used** by the current desktop build.
 
 ## Usage
 

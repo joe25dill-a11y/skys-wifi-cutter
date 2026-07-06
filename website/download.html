@@ -60,20 +60,25 @@
       font-size: 0.9rem;
       color: #fde68a;
       margin-top: 1.25rem;
+      text-align: left;
     }
+    .warn ol { margin-top: 0.5rem; padding-left: 1.25rem; }
+    .warn li { margin-bottom: 0.35rem; }
     h2 { font-size: 1.125rem; margin-bottom: 0.75rem; }
-    ul { padding-left: 1.25rem; color: var(--muted); }
+    ul, ol { padding-left: 1.25rem; color: var(--muted); }
     li { margin-bottom: 0.35rem; }
     .grid { display: grid; gap: 1rem; }
     @media (min-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } }
     footer { text-align: center; margin-top: 2rem; font-size: 0.8rem; color: var(--muted); }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
     code { background: rgba(0,0,0,.3); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.85em; }
+    .step-num { color: var(--accent); font-weight: 700; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <!-- Replace src with your hosted icon URL -->
       <img class="logo" src="../public/icon.png" alt="Skys WiFi Cutter" width="88" height="88" />
       <h1>Skys WiFi Cutter</h1>
       <p class="tagline">Free LAN network manager for Windows — scan, cut, lag, bandwidth, hotspot</p>
@@ -82,14 +87,25 @@
     <div class="card" style="text-align:center">
       <h2>Download for Windows</h2>
       <p style="color:var(--muted);margin-bottom:1.25rem">
-        Version <strong id="ver">4.4.0</strong> · Windows 10/11 · 64-bit · ~130 MB
+        Version <strong id="ver">4.7.0</strong> · Windows 10/11 · 64-bit · ~130 MB
       </p>
-      <a class="download-btn" id="dl" href="https://github.com/joe25dill-a11y/skys-wifi-cutter/releases/latest">
-        ⬇ Download from GitHub Releases
+      <a class="download-btn" id="dl" href="#">
+        ⬇ Download Skys WiFi Cutter
       </a>
       <p class="meta">Requires Administrator · Npcap installs automatically if needed</p>
+      <p class="meta" style="margin-top:0.5rem">
+        SHA256:
+        <a id="checksum-link" href="Skys-WiFi-Cutter-v4.7.0-sha256.txt" style="color:var(--accent);font-family:monospace;font-size:0.8rem">
+          Skys-WiFi-Cutter-v4.7.0-sha256.txt
+        </a>
+      </p>
       <div class="warn">
-        <strong>SmartScreen may warn</strong> — this build is not code-signed yet. Click <em>More info → Run anyway</em>.
+        <strong>Windows SmartScreen may warn</strong> — this build is not code-signed yet.
+        <ol>
+          <li>When SmartScreen blocks the download, click <strong>Keep</strong> or <strong>⋯ → Keep anyway</strong> in your browser if needed.</li>
+          <li>Right-click the installer → <strong>Run as administrator</strong>.</li>
+          <li>If a blue SmartScreen dialog appears, click <strong>More info</strong>, then <strong>Run anyway</strong>.</li>
+        </ol>
         Use only on networks you own. Unauthorized interference with others&apos; internet is illegal.
       </div>
     </div>
@@ -97,22 +113,26 @@
     <div class="grid">
       <div class="card">
         <h2>Install steps</h2>
-        <ol style="padding-left:1.25rem;color:var(--muted)">
-          <li>Right-click installer → <strong>Run as administrator</strong></li>
-          <li>Allow Npcap if prompted</li>
-          <li>Launch from Start Menu</li>
-          <li>Complete setup wizard → Scan</li>
+        <ol>
+          <li><span class="step-num">1.</span> Download <code>Skys.WiFi.Cutter.Setup.exe</code> from the button above.</li>
+          <li><span class="step-num">2.</span> Right-click → <strong>Run as administrator</strong> (required for cut, lag, hotspot).</li>
+          <li><span class="step-num">3.</span> Allow Npcap if prompted; reboot once if scan/cut fails after first install.</li>
+          <li><span class="step-num">4.</span> Launch from Start Menu — complete the setup wizard, then <strong>Scan</strong>.</li>
+          <li><span class="step-num">5.</span> Optional: enable phone remote in <strong>Tools → Remote</strong>, then open
+            <code>http://&lt;PC-IP&gt;:3001/remote</code> on your phone (same WiFi).</li>
         </ol>
       </div>
       <div class="card">
-        <h2>Features</h2>
+        <h2>Features (v4.6.x)</h2>
         <ul>
           <li>Device scan &amp; manufacturer lookup</li>
-          <li>Cut / restore / cut all</li>
-          <li>Lag switch &amp; speed limits</li>
-          <li>Per-device bandwidth</li>
+          <li>Cut / restore / cut all + network defense</li>
+          <li>Lag switch, speed limits, ghost pulse</li>
+          <li>Per-device bandwidth metering</li>
           <li>Hotspot freeze &amp; gaming mode</li>
-          <li>DNS &amp; port blocks</li>
+          <li>DNS &amp; port blocks + game presets</li>
+          <li>Schedules, groups, automation rules</li>
+          <li>Mobile remote page (opt-in PIN)</li>
         </ul>
       </div>
     </div>
@@ -122,14 +142,31 @@
       <ul>
         <li>Run as Administrator for cut/lag/hotspot</li>
         <li>Reboot once after first install if scan fails</li>
-        <li>In app: <strong>Tools → Diagnostics → Copy feedback report</strong></li>
+        <li>Guest WiFi / AP isolation can block ARP cut — use the cut troubleshooting wizard in Tools</li>
+        <li>In app: <strong>Tools → Diagnostics → Copy feedback report</strong>, then paste into a
+          <a href="https://github.com/joe25dill-a11y/skys-wifi-cutter/issues" style="color:var(--accent)">GitHub issue</a></li>
       </ul>
     </div>
 
     <footer>
       <p>Local-only · No cloud · No subscription · MIT License</p>
-      <p style="margin-top:0.5rem">Replace the download link above with your hosted <code>Skys WiFi Cutter Setup.exe</code></p>
+      <p style="margin-top:0.5rem">
+        <a href="https://github.com/joe25dill-a11y/skys-wifi-cutter">Source on GitHub</a>
+        · <a href="https://github.com/joe25dill-a11y/skys-wifi-cutter/issues">Report bugs</a>
+      </p>
     </footer>
   </div>
+  <script>
+    const VERSION = '4.7.0';
+    const REPO = 'joe25dill-a11y/skys-wifi-cutter';
+    const INSTALLER = 'Skys.WiFi.Cutter.Setup.exe';
+    document.getElementById('ver').textContent = VERSION;
+    document.getElementById('dl').href =
+      'https://github.com/' + REPO + '/releases/download/v' + VERSION + '/' + INSTALLER;
+    document.getElementById('checksum-link').href =
+      'Skys-WiFi-Cutter-v' + VERSION + '-sha256.txt';
+    document.getElementById('checksum-link').textContent =
+      'Skys-WiFi-Cutter-v' + VERSION + '-sha256.txt';
+  </script>
 </body>
 </html>

@@ -14,7 +14,7 @@ import { deviceController } from './services/deviceController.js';
 import { lagController } from './services/lagController.js';
 import { hotspotController } from './services/hotspotController.js';
 import { arpSpoofer } from './services/arpSpoofer.js';
-import { networkDefense } from './services/networkDefense.js';
+import { networkDefense, startGatewayDriftMonitor, getGatewayDriftAlerts } from './services/networkDefense.js';
 import { deviceStore } from './storage/deviceStore.js';
 import { appendBandwidthSample, getBandwidthHistory, getDeviceUsageHistory, getTopDevicesUsage } from './storage/bandwidthHistoryStore.js';
 import {
@@ -40,7 +40,7 @@ import { runNativeKick } from './utils/nativeEngine.js';
 import { runInternetSpeedTest } from './services/speedTest.js';
 import { normalizeMac } from './services/arpTable.js';
 import { logAudit, getAuditLog, clearAuditLog } from './storage/auditLogStore.js';
-import { getSettings, updateSettings } from './storage/appSettingsStore.js';
+import { getSettings, updateSettings, maskSettingsForClient } from './storage/appSettingsStore.js';
 import { generateHotspotPassword } from './utils/hotspotPassword.js';
 import {
   getGroups,
@@ -59,6 +59,7 @@ import { evaluateAutomationRules } from './services/rulesEngine.js';
 import { getRules, addRule, deleteRule } from './storage/rulesStore.js';
 import { getGamePresets, getGamePreset } from './services/gamePresets.js';
 import { requireRemotePin } from './middleware/remoteAuth.js';
+import { runCutTroubleshoot } from './services/cutTroubleshoot.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { getSystemChecks } from './utils/systemChecks.js';
 import logger from './utils/logger.js';
@@ -540,8 +541,30 @@ app.post('/api/devices/:mac/game-preset', async (req, res, next) => {
     if (!preset) {
       throw new ValidationError('Unknown game preset', 'presetId');
     }
-    const result = await portBlocker.start(mac, validateIP(device.ip_address), {
-      ports: preset.ports
+    const ip = validateIP(device.ip_address);
+    const applyLag = Boolean(req.body?.applyLag);
+
+    if (applyLag) {
+      const lagMs = validateLagValue(preset.lagMs, 'lagMs');
+      if (portBlocker.isBlocking(mac)) {
+        await portBlocker.stop(mac, ip);
+      }
+      await lagController.applyLag(mac, ip, lagMs, lagMs);
+      logAudit('game_preset', { mac, detail: { presetId: preset.id, lagMs, mode: 'lag' } });
+      return res.json({
+        success: true,
+        message: `${preset.label} lag applied (${lagMs}ms)`
+      });
+    }
+
+    if (lagSwitch.isActive(mac)) {
+      await lagController.removeLag(mac, ip);
+    }
+
+    const result = await portBlocker.start(mac, ip, {
+      ports: preset.ports,
+      preset: preset.id,
+      label: preset.label
     });
     logAudit('game_preset', { mac, detail: { presetId: preset.id, ports: preset.ports.length } });
     res.json({
@@ -608,6 +631,22 @@ app.get('/api/remote/status', requireRemotePin, async (req, res, next) => {
   }
 });
 
+app.get('/api/remote/devices', requireRemotePin, async (req, res, next) => {
+  try {
+    const devices = await deviceStore.getAll();
+    res.json({
+      devices: devices.map((d) => ({
+        mac: d.mac_address,
+        name: d.name || d.custom_name || d.mac_address,
+        ip: d.ip_address,
+        status: d.status
+      }))
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.post('/api/remote/hotspot/freeze', requireRemotePin, async (req, res, next) => {
   try {
     const targetMacs = parseTargetMacs(req.body);
@@ -648,7 +687,7 @@ app.post('/api/remote/devices/:mac/restore', requireRemotePin, async (req, res, 
     const device = await deviceStore.getByMac(mac);
     if (!device) throw new ValidationError('Device not found', 'mac');
     await deviceController.unblockDevice(mac, validateIP(device.ip_address));
-    await deviceStore.updateStatus(mac, 'active');
+    await deviceStore.updateStatus(mac, 'allowed');
     logAudit('uncut', { mac, detail: { remote: true } });
     res.json({ success: true });
   } catch (err) {
@@ -766,20 +805,50 @@ app.get('/api/schedules', async (req, res, next) => {
 
 app.post('/api/schedules', async (req, res, next) => {
   try {
-    const mac = validateMAC(req.body.mac);
     const action = req.body.action;
-    if (!['cut', 'restore', 'limit'].includes(action)) {
+    const validActions = [
+      'cut',
+      'restore',
+      'limit',
+      'lag',
+      'dns_block',
+      'port_block',
+      'firewall_kill',
+      'group_cut',
+      'group_restore'
+    ];
+    if (!validActions.includes(action)) {
       throw new ValidationError('Invalid action', 'action');
     }
-    const rule = await addSchedule({
-      mac,
+
+    const isGroupAction = action === 'group_cut' || action === 'group_restore';
+    const rulePayload = {
       action,
       time: String(req.body.time || '22:00'),
       days: Array.isArray(req.body.days) ? req.body.days : [0, 1, 2, 3, 4, 5, 6],
       uploadKbps: req.body.uploadKbps,
       downloadKbps: req.body.downloadKbps,
+      lagMs: req.body.lagMs,
+      preset: req.body.preset ? String(req.body.preset).slice(0, 32) : undefined,
+      domains: Array.isArray(req.body.domains) ? req.body.domains : undefined,
+      ports: Array.isArray(req.body.ports) ? req.body.ports : undefined,
+      enabled: req.body.enabled !== false,
       label: String(req.body.label || '').slice(0, 80)
-    });
+    };
+
+    if (isGroupAction) {
+      const groupId = String(req.body.groupId || '').trim();
+      if (!groupId) throw new ValidationError('groupId required for group actions', 'groupId');
+      const groups = await getGroups();
+      if (!groups.find((g) => g.id === groupId)) {
+        throw new ValidationError('Group not found', 'groupId');
+      }
+      rulePayload.groupId = groupId;
+    } else {
+      rulePayload.mac = validateMAC(req.body.mac);
+    }
+
+    const rule = await addSchedule(rulePayload);
     res.json(rule);
   } catch (err) {
     next(err);
@@ -1411,6 +1480,14 @@ function readRecentLogTail(maxLines = 40) {
   }
 }
 
+app.get('/api/diagnostics/cut-troubleshoot', async (req, res, next) => {
+  try {
+    res.json(await runCutTroubleshoot());
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.get('/api/diagnostics', async (req, res, next) => {
   try {
     res.json(await buildDiagnosticsPayload());
@@ -1486,7 +1563,7 @@ app.post('/api/settings/generate-hotspot-password', async (req, res, next) => {
   try {
     const password = generateHotspotPassword(12);
     const settings = await updateSettings({ defaultHotspotPassword: password });
-    res.json({ password, settings });
+    res.json({ password, settings: maskSettingsForClient(settings) });
   } catch (err) {
     next(err);
   }
@@ -1505,7 +1582,7 @@ app.post('/api/diagnostics/panic', async (req, res, next) => {
 
 app.get('/api/settings', async (req, res, next) => {
   try {
-    res.json(await getSettings());
+    res.json(maskSettingsForClient(await getSettings()));
   } catch (err) {
     next(err);
   }
@@ -1513,7 +1590,7 @@ app.get('/api/settings', async (req, res, next) => {
 
 app.patch('/api/settings', async (req, res, next) => {
   try {
-    res.json(await updateSettings(req.body));
+    res.json(maskSettingsForClient(await updateSettings(req.body)));
   } catch (err) {
     next(err);
   }
@@ -1541,7 +1618,7 @@ app.get('/api/alerts', async (req, res, next) => {
   try {
     res.json({
       bandwidth: getLastAlerts(),
-      mitm: getMitmIssues()
+      mitm: [...getMitmIssues(), ...getGatewayDriftAlerts()]
     });
   } catch (err) {
     next(err);
@@ -1592,6 +1669,12 @@ app.get('/api/mitm/health', (req, res) => {
   res.json({ issues: getMitmIssues() });
 });
 
+const websiteDir = path.join(__dirname, '..', 'website');
+app.get('/remote', (req, res) => {
+  res.sendFile(path.join(websiteDir, 'remote.html'));
+});
+app.use('/website', express.static(websiteDir));
+
 if (isProduction) {
   const distPath = getDistDir();
   logger.info(`Serving UI from ${distPath}`);
@@ -1619,6 +1702,7 @@ async function bootstrap() {
 
   ruleScheduler.start();
   startMitmMonitor();
+  startGatewayDriftMonitor();
 
   bandwidthHistoryTimer = setInterval(async () => {
     try {

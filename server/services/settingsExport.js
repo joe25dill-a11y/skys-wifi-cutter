@@ -1,5 +1,5 @@
 import { getGroups } from '../storage/deviceGroupsStore.js';
-import { getSettings } from '../storage/appSettingsStore.js';
+import { getSettings, maskSettingsForClient } from '../storage/appSettingsStore.js';
 import { getSchedules } from '../storage/scheduleStore.js';
 import { deviceStore } from '../storage/deviceStore.js';
 import { updateSettings } from '../storage/appSettingsStore.js';
@@ -13,7 +13,7 @@ export async function exportAppData() {
   return {
     version: 1,
     exportedAt: new Date().toISOString(),
-    settings: await getSettings(),
+    settings: maskSettingsForClient(await getSettings()),
     groups: await getGroups(),
     schedules: await getSchedules(),
     devices: devices.map((d) => ({

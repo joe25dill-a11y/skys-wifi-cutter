@@ -1,3 +1,5 @@
+> **Legacy notice:** This document describes an older cloud-auth design. **Skys WiFi Cutter is a local-only desktop app** — no Supabase, no JWT, no remote database. See `PUBLIC_RELEASE.md` for current architecture.
+
 # FREE Network Manager - Security Documentation
 
 ## ⚠️ CRITICAL SECURITY WARNINGS

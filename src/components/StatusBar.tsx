@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Shield, Wifi, Sparkles } from 'lucide-react';
 import { HealthResponse } from '../types/device';
+import { apiFetch } from '../config/api';
 
 interface StatusBarProps {
   health: HealthResponse | null;
@@ -33,13 +35,21 @@ function Chip({
 }
 
 export function StatusBar({ health, deviceCount, onlineCount = 0 }: StatusBarProps) {
+  const [remoteEnabled, setRemoteEnabled] = useState(false);
   const checks = health?.checks;
   const version = health?.version ?? '3.1.0';
+  const defenseActive = Boolean(health?.defense?.isActive);
   const engineLabel = checks?.nativeMeter
     ? 'Native C# (fast)'
     : checks?.scapy
       ? 'Python fallback'
       : 'Missing';
+
+  useEffect(() => {
+    apiFetch<{ remoteControlEnabled?: boolean }>('/settings')
+      .then((s) => setRemoteEnabled(Boolean(s.remoteControlEnabled)))
+      .catch(() => null);
+  }, []);
 
   return (
     <div className="mb-4 rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-slate-950 via-indigo-950 to-blue-950 text-white p-5 shadow-xl shadow-indigo-950/40">
@@ -77,6 +87,13 @@ export function StatusBar({ health, deviceCount, onlineCount = 0 }: StatusBarPro
             ok={Boolean(checks?.flowReady ?? health?.flowTracking?.ready)}
             label={checks?.flowReady ? 'Per-device BW' : 'BW monitor'}
             detail={checks?.flowBlockReason || 'Flow tracking + MITM meter'}
+          />
+          <Chip ok={defenseActive} label={defenseActive ? 'Defense ON' : 'Defense off'} detail="Gateway ARP pinned" />
+          <Chip
+            ok={remoteEnabled}
+            label={remoteEnabled ? 'Remote ON' : 'Remote off'}
+            detail="Phone remote API (opt-in PIN)"
+            setup={!remoteEnabled}
           />
         </div>
       </div>
